@@ -161,3 +161,14 @@ A task is only done when all of the following hold:
 
 ### Documentation
 - **Every AI interaction is logged** in `docs/ai_edit_log.md` following its template.
+
+## Local Environment (Windows)
+
+The sentence above about installing directly and not creating a virtual environment applies only to the course cloud workspace. On this local machine:
+
+- The project runs on Windows with PowerShell.
+- A virtual environment (`venv`) already exists in the project folder and must be used.
+- Do not create a new virtual environment.
+- Never install packages outside the `venv`.
+- Run every tool through `python -m` (for example `python -m pytest`).
+- Commands must be PowerShell compatible, with paths relative to the project root.
