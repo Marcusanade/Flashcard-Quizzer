@@ -9,5 +9,4 @@ extend-exclude = '''
 
 [tool.isort]
 profile = "black"
-line_length = 88
-skip = ["venv", "htmlcov"]
+skip = ["venv", "htmlcov", ".claude"]
