@@ -138,26 +138,26 @@ The goal is not just to build a working application, but to learn effective AI c
 
 Success in this project comes from thoughtful collaboration with AI, not from accepting AI suggestions without review and understanding.
 
-## Definition of Done del proyecto
+## Project Definition of Done
 
-Una tarea solo se considera terminada cuando cumple todo lo siguiente:
+A task is only done when all of the following hold:
 
-### Arquitectura
-- **Modular**, con tres responsabilidades separadas: `data_loader` (carga y validación de mazos JSON), `quiz_engine` (lógica del quiz, sin I/O) y `ui` (entrada/salida por consola).
-- **Strategy**: `QuizMode` es una clase abstracta (ABC) con tres implementaciones: `SequentialMode`, `RandomMode` y `AdaptiveMode`.
-- **Factory**: una fábrica crea el modo a partir del flag `--mode`; no se usan cadenas `if/elif` dispersas para elegir el modo.
+### Architecture
+- **Modular**, with three separate responsibilities: `data_loader` (loading and validating JSON decks), `quiz_engine` (quiz logic, no I/O) and `ui` (console input/output).
+- **Strategy**: `QuizMode` is an abstract base class (ABC) with three implementations: `SequentialMode`, `RandomMode` and `AdaptiveMode`.
+- **Factory**: a factory creates the mode from the `--mode` flag; no scattered `if/elif` chains to pick the mode.
 
-### Código
-- Type hints en **todas** las funciones y métodos (`disallow_untyped_defs = True`).
-- CLI con **argparse** (no click).
-- Validación **propia** de los datos (no pydantic), con excepciones personalizadas y mensajes que indiquen la posición de la tarjeta errónea.
-- Docstrings en módulos, clases y funciones públicas.
+### Code
+- Type hints on **all** functions and methods (`disallow_untyped_defs = True`).
+- CLI built with **argparse** (not click).
+- **Custom** data validation (not pydantic), with custom exceptions and messages that name the position of the invalid card.
+- Docstrings on modules, classes and public functions.
 
-### Calidad
-- Tests con **pytest** y cobertura **mayor del 80 %** (`python -m pytest --cov=. --cov-report=html`).
-- `python -m flake8 .` sin errores.
-- `python -m black --check .` y `python -m isort --check .` limpios.
-- `python -m mypy .` limpio.
+### Quality
+- Tests with **pytest** and coverage **above 80%** (`python -m pytest --cov=. --cov-report=html`).
+- `python -m flake8 .` reports no errors.
+- `python -m black --check .` and `python -m isort --check .` are clean.
+- `python -m mypy .` is clean.
 
-### Documentación
-- **Cada interacción con la IA se registra** en `docs/ai_edit_log.md` siguiendo su plantilla.
+### Documentation
+- **Every AI interaction is logged** in `docs/ai_edit_log.md` following its template.
