@@ -90,6 +90,53 @@ For each AI interaction, create a new entry with the following structure:
 - The AI added a setting I did not ask for (`extend-ignore`). It was correct here, but every unrequested addition needs a review
 - The first prompt did not follow the Requirements Prompt pattern from `ai_guidance/` (Context, Requirements, Constraints, Examples) and was written in Spanish. From now on, prompts follow that pattern in English
 
+### 2026-11-18 - Configuration cleanup and verification (Phase 1)
+
+**Context:** After the first commit of the quality tooling, I reviewed each configuration file (`.flake8`, `pyproject.toml`, `mypy.ini`) against the real file on disk, not against Claude Code's summary. I used small prompts for each fix and verified every change with `git diff` and the tools themselves before committing.
+
+**AI Tool Used:** Claude Code in VS Code, plus a separate Claude chat session as a planning assistant.
+
+**Prompt/Request:** Three small prompts, each with Context, Requirements and Constraints, in English:
+1. Remove the redundant `line_length = 88` from `[tool.isort]`, because `profile = "black"` already sets it, and confirm with `isort --show-config` that the value is still 88.
+2. Add `.claude` to the isort `skip` list, because isort printed `UserWarning: Unable to parse file ... 'charmap' codec` for the emoji-containing, extensionless files in `.claude/commands/`.
+3. Change `python_version` in `mypy.ini` from 3.14 to 3.10, and if mypy rejected 3.10, stop and report the exact error instead of choosing another value.
+
+**AI Response:** All three changes were correct on the first attempt. Each diff was exactly the lines requested. For the second prompt, Claude Code reported that `isort --check .` ended with exit code 0 and only `Skipped 2 files`, and said openly that it had not run the check before the change, so it had not seen the original warnings. It also reported running the tools through `.\venv\Scripts\python.exe`, because the `python` in its terminal was the global one without isort.
+
+**Changes Made:**
+- Accepted all three diffs without modification
+- Committed the isort changes together (`2460ddf`) and the mypy change separately (`b4f80cb`)
+- Re-ran `isort --check .` and `black --check .` in my own terminal with the venv active to confirm the warnings were gone
+
+**Reasoning:**
+- The `charmap` warnings only appeared when I ran the check myself. Neither the AI nor I predicted them from the diff, so verification with the real tools mattered more than reading the diff
+- Claude Code does not inherit my activated virtual environment. A future "No module named ..." error from the agent will most likely come from this
+- I first planned to remove `python_version` entirely to avoid a possible mypy problem with Python 3.14. After checking that mypy 2.4.1 works with 3.14, that risk did not exist. I then pinned 3.10 because the specification requires Python 3.10 or higher, so mypy can flag features that would fail on the minimum version
+- Telling the AI to stop and report if 3.10 was rejected kept it from silently picking another value
+
+**Outcome:** The three configuration files are verified and consistent: line length 88 in black and flake8, isort inheriting it from the black profile, and mypy targeting Python 3.10. `black --check`, `isort --check` and `mypy` all finish clean. In the same phase, I settled the architecture and the rules of the adaptive mode (rest between repetitions proportional to the deck size and a card retired after 3 failures) with the planning assistant, before writing any code prompt.
+
+**Lessons Learned:**
+- Verifying with the real tools in my own environment catches side effects that a correct-looking diff hides
+- An AI agent runs in its own environment, which may differ from mine (virtual environment, encoding)
+- Asking the AI to stop and report when a condition fails is safer than letting it improvise
+- Small prompts with one change each produced correct results and made review quick
+- An AI that states what it did not check is easier to trust and tells me where to verify
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ### [Date] - [Brief Description]
 
 **Context:** 
