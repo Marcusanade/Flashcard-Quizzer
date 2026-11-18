@@ -124,7 +124,38 @@ For each AI interaction, create a new entry with the following structure:
 - An AI that states what it did not check is easier to trust and tells me where to verify
 
 
+### 2026-11-18 - Data layer: Flashcard model, file reader and loader (Prompts 1A and 1B)
 
+**Context:** I needed a data layer that turns a JSON deck into validated `Flashcard` objects and reports every problem as a readable one-line message instead of a traceback. I split the work into two small prompts, as recommended in `ai_guidance/prompting_best_practices.md`, instead of one large prompt: 1A for the model and the low-level file reader, and 1B for the loader and its validation.
+
+**AI Tool Used:** Claude Code in VS Code, plus a separate Claude chat session as a planning assistant to draft the prompts.
+
+**Prompt/Request:** Both prompts followed the Requirements Prompt pattern from `ai_guidance/` (Context, Requirements, Constraints, Examples), in English, and ended with a Verification section.
+- Prompt 1A: create `models.py` with a frozen dataclass `Flashcard(front, back)` and `utils/file_handler.py` with `read_text_file(path)`. It had to read with `encoding="utf-8-sig"`, explicitly raise `IsADirectoryError` for directories (because opening a directory raises `PermissionError` on Windows), and not catch any exception.
+- Prompt 1B: create `data_loader.py` with `load_flashcards(path)` and `FlashcardLoadError`. It accepted the array and the `{"cards": [...]}` formats and named 15 exact failure cases (empty path, missing file, directory, permissions, invalid UTF-8, other OS errors, malformed JSON with line and column, wrong root, `cards` not a list, empty deck, card not an object, missing `front`, missing `back`, non-string fields, empty or blank fields). It also required the `except` order (specific exceptions before `OSError`), `raise ... from error`, positions counted from 1, `strip()` on the texts, small private helper functions, no printing and no `sys.exit`.
+- Both prompts told the agent to run every tool through `.\venv\Scripts\python.exe -m ...` and to report the exact results.
+
+**AI Response:** For 1A, Claude Code created both files, with docstrings in Google style, and said it had not tested the BOM case yet. For 1B, it created `data_loader.py` with `load_flashcards`, `FlashcardLoadError` and five private helpers. It covered all the named cases, used `raise ... from error` everywhere and listed the exact message of each case. It tested every case it could reproduce on Windows with a throwaway script in the system temp folder, deleted afterwards. It reported openly that the permission error and the generic OS error cases could not be reproduced reliably, so those two branches were untested. It also noticed that `models.py` and `utils/file_handler.py` had been committed between the two prompts.
+
+**Changes Made:**
+- No code changes were needed. I accepted both results as generated (commits `ab580d2` and `6805568`)
+- The improvements happened before running the prompts: splitting the work into small prompts, naming every failure case, fixing the `except` order and adding the explicit directory check
+- I left two edge cases unhandled on purpose and noted them as known limitations: a JSON with extreme nesting raises `RecursionError`, and an empty `Path` object (not a string) is treated as the current directory
+
+**Reasoning:**
+- A card without a `back` would break the quiz far from the cause, so the loader must reject it at load time with its position
+- Listing each failure case worked better than asking for "error handling", which is what the template example in the log also teaches
+- A real deck will never have thousands of nested brackets, and from the command line the path is always a string, so handling those cases would add code without real benefit
+- `utf-8-sig` was chosen over `utf-8` because Windows editors can save a BOM that breaks `json.loads`, and it behaves the same on Linux
+
+**Outcome:** The data layer works. `data/glossary.json` (array format) loads 10 cards and `data/python_basics.json` (object format) loads 8. All the reproducible errors produce a single readable line, and a deck with and without BOM loads the same. `black`, `isort`, `flake8` and `mypy` pass. The permission error, the generic OS error and the BOM case will be covered by tests in the next prompt.
+
+**Lessons Learned:**
+- Naming every failure case and the order of the `except` blocks in the prompt produced correct code on the first attempt
+- A platform detail, such as the different error when opening a directory on Windows, is easy to miss, so stating it in the prompt avoided behavior that would differ between systems
+- Combining the agent's own smoke tests with my commands gave two independent confirmations
+- The agent clearly said which branches were untested, and that tells me exactly where the tests must go
+- Splitting work into small prompts made each review short and each commit easy to explain
 
 
 
