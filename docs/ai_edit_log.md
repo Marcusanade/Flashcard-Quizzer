@@ -158,6 +158,42 @@ For each AI interaction, create a new entry with the following structure:
 - Splitting work into small prompts made each review short and each commit easy to explain
 
 
+### 2026-11-18 - Data layer tests and a review gap (Prompts 1C and 1D)
+
+**Context:** The data layer was committed without tests. I asked Claude Code for the tests in two small prompts: 1C for `data_loader.py` and 1D for `models.py` and `utils/file_handler.py`. I added 1D after reviewing the 1C result and finding a gap that the coverage number hid.
+
+**AI Tool Used:** Claude Code in VS Code, plus a separate Claude chat session as a planning assistant to draft the prompts and review the results.
+
+**Prompt/Request:** Both prompts followed the Requirements Prompt pattern (Context, Requirements, Constraints, Examples) in English, with a Verification section.
+- Prompt 1C: create `tests/test_flashcard_loader.py` with the four test names required by the course, one test for each of the 15 failure cases, tests for the BOM, the exception chaining and the real decks. The Context listed the exact error messages, so the tests would check text instead of guessing it. It required patching `data_loader.read_text_file` (and not `utils.file_handler`) to simulate permission and OS errors, because `data_loader` imports the function by name.
+- Prompt 1D: create `tests/test_models.py` and `tests/test_file_handler.py` to test each module on its own: immutability, equality and hashing of `Flashcard`, and the BOM, non-ASCII text, directory and invalid UTF-8 behavior of `read_text_file`.
+- Both prompts said: if a test fails because of a real bug, do not change the source code and report it, do not weaken a test to make it pass, and run the tools through the venv Python. Both asked for a mutation check: break the code on purpose and confirm that tests fail.
+
+**AI Response:** For 1C, Claude Code created 48 tests, all passing, with 100% coverage on the three modules. For the mutation check it changed `enumerate(raw_cards, 1)` to `enumerate(raw_cards, 0)`, saw 20 tests fail, and restored the file. For 1D it created 18 more tests (66 in total). Changing `utf-8-sig` to `utf-8` made 2 tests fail, and removing `frozen=True` made 5 fail. After restoring both files, `git diff` was empty. It reported that it could not test the code on Python 3.10 because the venv uses 3.14, and that it did not add this log entry because I had told it not to modify existing files. In the 1D run, its writing tool turned the escape `"\ufeff"` into a literal invisible BOM character, isort reported it, and Claude Code restored the escape sequence.
+
+**Changes Made:**
+- Accepted the 1C tests as generated. I reviewed the file against the prompt: the required names, one test per failure case, message assertions, the patched name, type hints, and no `# type: ignore` or `unittest.mock`
+- Added prompt 1D after the review. All tests in 1C reached `models.py` and `utils/file_handler.py` only through the loader, so the immutability of `Flashcard` and the directory check were not tested directly, even though coverage showed 100%
+- Verified the mutation counts myself by counting which 1C tests assert "Card 1": 19, plus the position test, gives the 20 failures that Claude Code reported
+- Accepted the correction that the AI made to the `\ufeff` escape, and confirmed it in the file I received
+
+**Reasoning:**
+- A coverage percentage measures executed lines, not whether each behavior is checked. Mutation checks show that the tests can fail
+- The test that put two identical cards in a set documents that duplicate cards are indistinguishable. This matters for the adaptive mode, which must not use the card itself as the key of a failure counter
+- Forbidding changes to the source code when a test fails keeps real bugs visible instead of hiding them behind an edited test
+- The total coverage of 100% includes the test files and the empty `__init__.py` files, so it overstates the result
+
+**Outcome:** 66 tests pass, with 100% coverage on `data_loader.py`, `models.py` and `utils/file_handler.py`, and black, isort, flake8 and mypy are clean. The data layer is complete. The permission and generic OS error branches, which the first loader prompt could not test, are now covered by simulating the errors. The tests are in commits `0030fe7` (loader tests, 1C) and `2577d30` (model and file handler tests, 1D).
+
+**Lessons Learned:**
+- High coverage can hide an untested behavior, so I check what each test asserts and not only the percentage
+- A deliberate code change that makes tests fail is a quick way to know that the tests protect something
+- Giving the exact error messages in the prompt produced tests that check real text
+- Telling the AI to report a failing test instead of changing the source code keeps the review in my hands
+- An AI tool can alter a file in a way that is invisible when reading, such as an escape turned into a literal character, and the quality tools caught it
+- Asking for the testing of each module separately from the module that uses it gave tests that explain what each part must do
+
+
 
 
 
