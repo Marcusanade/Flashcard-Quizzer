@@ -12,10 +12,12 @@ from dataclasses import dataclass
 
 from data_loader import FlashcardLoadError, load_flashcards
 from models import Flashcard
-from quiz_engine import AnswerResult, QuizModeFactory, QuizSession
+from quiz_engine import AnswerResult, QuizModeFactory, QuizSession, SessionStats
 
 EXIT_OK = 0
 EXIT_LOAD_ERROR = 1
+
+TABLE_HEADER = ("Statistic", "Value")
 
 GREEN = "\033[32m"
 RED = "\033[31m"
@@ -203,6 +205,108 @@ def _ask_questions(
     return True
 
 
+def _format_table(rows: Sequence[tuple[str, str]]) -> list[str]:
+    """Build a two-column ASCII table.
+
+    Each column is as wide as its longest text, header included.
+
+    Args:
+        rows: The data rows, as pairs of texts. The header row is added.
+
+    Returns:
+        The lines of the table: border, header, border, rows, border.
+    """
+    width1 = max(len(first) for first, _ in (TABLE_HEADER, *rows))
+    width2 = max(len(second) for _, second in (TABLE_HEADER, *rows))
+    border = "+" + "-" * (width1 + 2) + "+" + "-" * (width2 + 2) + "+"
+
+    def row_line(first: str, second: str) -> str:
+        """Format one table row."""
+        return f"| {first.ljust(width1)} | {second.ljust(width2)} |"
+
+    lines = [border, row_line(*TABLE_HEADER), border]
+    lines.extend(row_line(first, second) for first, second in rows)
+    lines.append(border)
+    return lines
+
+
+def _missed_terms_lines(missed: Sequence[str]) -> list[str]:
+    """Build the lines that list the missed terms.
+
+    Args:
+        missed: The missed terms, in order of first miss.
+
+    Returns:
+        ``Missed terms: none`` if there are none, otherwise a title line
+        followed by one ``  - <term>`` line per term.
+    """
+    if not missed:
+        return ["Missed terms: none"]
+    return ["Missed terms:", *(f"  - {term}" for term in missed)]
+
+
+def _accuracy_text(stats: SessionStats) -> str:
+    """Format the accuracy with one decimal.
+
+    Args:
+        stats: The session statistics.
+
+    Returns:
+        For example ``66.7%``.
+    """
+    return f"{stats.accuracy_percent:.1f}%"
+
+
+def _summary_lines(stats: SessionStats) -> list[str]:
+    """Build the short summary shown at the end of the quiz.
+
+    Args:
+        stats: The session statistics.
+
+    Returns:
+        The table with the total questions and the accuracy, followed by the
+        missed terms.
+    """
+    rows = [
+        ("Total questions", str(stats.total_questions)),
+        ("Accuracy", _accuracy_text(stats)),
+    ]
+    return _format_table(rows) + _missed_terms_lines(stats.missed_terms)
+
+
+def _report_lines(
+    stats: SessionStats,
+    mode: str,
+    deck_file: str,
+    deck_size: int,
+    finished: bool,
+) -> list[str]:
+    """Build the full statistics report shown with ``--stats``.
+
+    Args:
+        stats: The session statistics.
+        mode: Name of the quiz mode, in lowercase.
+        deck_file: The deck path, as the user typed it.
+        deck_size: Number of cards in the deck.
+        finished: True if the cards ran out, False if the user quit.
+
+    Returns:
+        The table with all the rows, followed by the missed terms.
+    """
+    rows = [
+        ("Mode", mode),
+        ("Deck file", deck_file),
+        ("Deck size", str(deck_size)),
+        ("Session", "finished" if finished else "stopped"),
+        ("Total questions", str(stats.total_questions)),
+        ("Correct answers", str(stats.correct_answers)),
+        ("Incorrect answers", str(stats.total_questions - stats.correct_answers)),
+        ("Accuracy", _accuracy_text(stats)),
+        ("Distinct cards missed", str(len(stats.missed_terms))),
+    ]
+    return _format_table(rows) + _missed_terms_lines(stats.missed_terms)
+
+
 def run(
     argv: Sequence[str] | None = None,
     input_fn: Callable[[str], str] = input,
@@ -210,6 +314,9 @@ def run(
     error_fn: Callable[[str], None] = _print_error,
 ) -> int:
     """Run the quiz from the command line.
+
+    After the closing line, a short summary is shown, or the full report if
+    ``--stats`` was given. Nothing is shown if the deck cannot be loaded.
 
     Args:
         argv: Command line arguments. ``sys.argv[1:]`` is used if ``None``.
@@ -230,4 +337,12 @@ def run(
         return EXIT_LOAD_ERROR
     finished = _ask_questions(session, input_fn, output_fn)
     output_fn("Quiz finished." if finished else "Quiz stopped.")
+    output_fn("")
+    stats = session.stats()
+    if args.stats:
+        lines = _report_lines(stats, args.mode, args.file, len(cards), finished)
+    else:
+        lines = _summary_lines(stats)
+    for line in lines:
+        output_fn(line)
     return EXIT_OK
