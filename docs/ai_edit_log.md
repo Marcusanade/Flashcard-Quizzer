@@ -383,6 +383,41 @@ For each AI interaction, create a new entry with the following structure:
 - This phase again produced no corrected code. The evidence of review is in the independent calculation and in the mistake that it prevented
 
 
+### 2026-11-19 - Statistics report redesign (Prompts 5A and 5B)
+
+**Context:** The final statistics were a plain two column table with the missed terms listed below it. I wanted a more elegant report: a box of fixed width, an accuracy bar and a rank letter, with the missed terms inside the box and wrapped when they are long. The design had to stay ASCII only, because Unicode box characters can fail when the output is redirected on Windows. This change affected about 35 tests that compared the old table, so I did it before adding other features, to avoid writing new tests with the old format and rewriting them later. I split the work into two prompts: 5A for `ui.py` and `tests/test_ui.py`, and 5B for the integration tests, with a single commit at the end.
+
+**AI Tool Used:** Claude Code in VS Code, plus a separate Claude chat session as a planning assistant to design the layout, generate the expected output and draft the prompts.
+
+**Prompt/Request:** Both prompts followed the Requirements Prompt pattern (Context, Requirements, Constraints, Examples) in English, with a Verification section.
+- Design agreed before any prompt, with a preview: a 60 column box with a centered title, the rows total questions, accuracy and rank, a 20 cell bar, and ranks S (100%), A (90% or more), B (75%), C (60%) and D, with "-" when there are no questions. The bar and the rank use integer arithmetic only, so a value at a threshold cannot cross it because of a floating point rounding. Long deck paths are shortened keeping their end.
+- Prompt 5A: change the report functions in `ui.py` and update `tests/test_ui.py`. I generated the expected blocks with a script that implements the design separately and put them in the prompt as literal text. The prompt predicted that exactly 16 tests of `tests/test_integration.py` would fail afterwards and that three would still pass. It asked for 15 mutations, with a backup copy of `ui.py` and a hash comparison, because that file had changes that were not committed yet.
+- Prompt 5B: adapt the integration tests. Instead of writing 25 more literal blocks, I asked for a reader of the box in `tests/helpers.py` (`parse_report`) that does not import anything from `ui`, with its own tests and literal boxes, so the integration tests check the numbers and the missed terms of real games while the exact layout stays pinned in `test_ui.py`. It asked for 14 mutations of the engine, the loader, the interface and the reader itself.
+
+**AI Response:** In 5A, Claude Code rewrote the report functions, removed the old ones and updated the tests. `ui.py` reached 100% line and branch coverage with `test_ui.py` alone, and all 15 mutations were detected. The suite then had 308 passing tests and exactly the 16 failures that I had predicted, with the names I expected. It reported two small deviations: a helper `_head_lines` that I had not listed, and a different way of slicing in `_fit`, which avoids a case where `text[-0:]` would return the whole text. In 5B it fixed the 16 tests, added `parse_report` and its tests, and the suite reached 340 tests with 100% line and branch coverage. Of the 14 mutations, one was not detected with the tests that I had listed: changing the label width from 19 to 18 characters, because the real labels have at most 17 characters. It said so openly and added a test with a label of 19 characters, which detects it. It also added a case that I had not listed, a term after the "none" row, because otherwise another mutation gave the same result.
+
+**Changes Made:**
+- Changed the order of the work before writing code: statistics first, so the tests of the next features start with the new format
+- Predicted by reading the integration tests that exactly 16 would fail and 3 would pass, and used that count as a check that nothing else was affected. It matched
+- Accepted the two deviations of the agent after reading them: the helper `_head_lines` and the safer slicing in `_fit`
+- Accepted the two extra tests that the agent added after the mutations. Both fix gaps in my list of tests for the reader, not in its code
+- Committed all the files together once the whole suite was green (`7cb8662`)
+
+**Reasoning:**
+- The expected blocks came from a script and not from the code under test, so a wrong layout cannot pass by being compared with itself. Previewing the output also caught a mistake of my own script before it reached the prompt: a label that filled its whole column and was glued to its value
+- Integer arithmetic makes the thresholds exact and testable at the boundaries, for example 9 correct of 10 is an A and 89 of 100 is a B
+- The reader of the box is a test helper that checks the output from the outside. Because a faulty helper makes other tests pass for the wrong reason, I asked for its own tests and for mutations of the reader itself
+- Leaving the suite red between the two prompts was a deliberate step, and nothing was committed until it was green again, so the history has no commit with failing tests
+- The reader joins the wrapped lines of a term with one space. This is exact when the wrap happens at a space, as in the real decks, and it is a known limitation
+
+**Outcome:** The report is now a 60 column ASCII box, with an accuracy bar, a rank and the missed terms inside, in a short version and a full version with `--stats`. 340 tests pass, `ui.py` and all the other files have 100% line and branch coverage, and `black`, `isort`, `flake8` and `mypy` are clean. The commit is `7cb8662`.
+
+**Lessons Learned:**
+- Predicting which tests will fail before a deliberate change turns the result into a check: the exact count and names matched, so no other behavior moved
+- Mutation checks also test my own prompts. Two behaviors were missing from my list of tests, and a mutation that survives shows exactly where
+- A test can pass for all real data and still not protect a rule. The label width was the same for every real label, so only an artificial label could tell 18 from 19
+- Expected output generated separately and viewed before use catches mistakes in the plan, not only in the code
+- This work again produced no wrong code from the AI. The evidence of review is in the predicted failures, the gaps that the mutations found in my own prompt, and the two deviations that I read and accepted
 
 
 
