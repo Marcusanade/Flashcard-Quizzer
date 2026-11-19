@@ -1,0 +1,20 @@
+Flashcard Quizzer - Test coverage report
+Generated: 2026-11-19 18:24 (local time)
+Command: python -m pytest --cov=. --cov-report=html
+Python 3.14.6, pytest 9.2.0, coverage 7.17.3
+Tests: 469 passed
+Measured: application code only (tests/ and __init__.py files are omitted), with branch coverage
+Required: 90.0%   Result: 100.00%
+
+Name                    Stmts   Miss Branch BrPart  Cover   Missing
+-------------------------------------------------------------------
+banner.py                   5      0      0      0   100%
+data_loader.py             61      0     18      0   100%
+main.py                     4      0      2      0   100%
+models.py                   3      0      0      0   100%
+quiz_engine.py            156      0     46      0   100%
+sound.py                   46      0      8      0   100%
+ui.py                     164      0     42      0   100%
+utils\file_handler.py       7      0      2      0   100%
+-------------------------------------------------------------------
+TOTAL                     446      0    118      0   100%
