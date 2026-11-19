@@ -8,6 +8,7 @@ deck loading in ``data_loader``: this module only talks to the user.
 import argparse
 import sys
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 
 from data_loader import FlashcardLoadError, load_flashcards
 from models import Flashcard
@@ -15,6 +16,31 @@ from quiz_engine import AnswerResult, QuizModeFactory, QuizSession
 
 EXIT_OK = 0
 EXIT_LOAD_ERROR = 1
+
+GREEN = "\033[32m"
+RED = "\033[31m"
+RESET = "\033[0m"
+
+EXIT_WORD = "exit"
+
+
+@dataclass(frozen=True)
+class ReadResult:
+    """What the user did when asked for an answer.
+
+    A small dataclass is clearer than a tuple because both fields have a
+    name.
+
+    Attributes:
+        answer: The text typed by the user, or ``None`` if the user wants to
+            quit.
+        interrupted: True if the user quit with Ctrl+C or by closing the
+            input, so the cursor is left after the prompt. False if the user
+            typed the exit word or gave a normal answer.
+    """
+
+    answer: str | None
+    interrupted: bool
 
 
 def _print_error(message: str) -> None:
@@ -87,6 +113,19 @@ def _question_line(number: int, card: Flashcard, is_review: bool) -> str:
     return f"{_question_label(number, is_review)}: {card.front}"
 
 
+def _colorize(text: str, color: str) -> str:
+    """Wrap a text in an ANSI color.
+
+    Args:
+        text: The text to color.
+        color: The ANSI escape code that starts the color.
+
+    Returns:
+        The text between the color code and the reset code.
+    """
+    return color + text + RESET
+
+
 def _feedback_line(result: AnswerResult) -> str:
     """Build the feedback shown after an answer.
 
@@ -94,24 +133,58 @@ def _feedback_line(result: AnswerResult) -> str:
         result: The outcome of the answer.
 
     Returns:
-        ``Correct!`` or ``Incorrect. Answer: <expected>``.
+        ``Correct!`` in green or ``Incorrect. Answer: <expected>`` in red.
     """
     if result.correct:
-        return "Correct!"
-    return f"Incorrect. Answer: {result.expected}"
+        return _colorize("Correct!", GREEN)
+    return _colorize(f"Incorrect. Answer: {result.expected}", RED)
+
+
+def _read_answer(input_fn: Callable[[str], str]) -> ReadResult:
+    """Read one answer and detect when the user wants to quit.
+
+    This is the only place that handles Ctrl+C and the end of the input. It
+    prints nothing itself: the caller decides what to show, using
+    ``ReadResult.interrupted``.
+
+    Known limitation: the word "exit" is reserved. A card whose correct
+    answer is literally "exit" cannot be answered correctly.
+
+    Args:
+        input_fn: Function used to read the answer. The prompt is ``> ``.
+
+    Returns:
+        The answer, or a result with ``answer=None`` when the user typed the
+        exit word (ignoring spaces and letter case), pressed Ctrl+C or closed
+        the input.
+    """
+    try:
+        text = input_fn("> ")
+    except (KeyboardInterrupt, EOFError):
+        return ReadResult(answer=None, interrupted=True)
+    if text.strip().casefold() == EXIT_WORD:
+        return ReadResult(answer=None, interrupted=False)
+    return ReadResult(answer=text, interrupted=False)
 
 
 def _ask_questions(
     session: QuizSession,
     input_fn: Callable[[str], str],
     output_fn: Callable[[str], None],
-) -> None:
-    """Ask questions until the session has no more cards.
+) -> bool:
+    """Ask questions until the session has no more cards or the user quits.
+
+    A question that was shown but not answered is not counted. If the user
+    quits with Ctrl+C or by closing the input, an empty line is shown first
+    so the next message starts on a new line.
 
     Args:
         session: The quiz session.
         input_fn: Function used to read an answer.
         output_fn: Function used to show a message.
+
+    Returns:
+        True if the session ran out of cards, False if the user quit.
     """
     # Two identical cards in a deck are equal, so for the "(review)" label
     # they count as the same card.
@@ -121,8 +194,13 @@ def _ask_questions(
         number += 1
         output_fn(_question_line(number, card, card in asked))
         asked.add(card)
-        result = session.submit_answer(input_fn("> "))
-        output_fn(_feedback_line(result))
+        reply = _read_answer(input_fn)
+        if reply.answer is None:
+            if reply.interrupted:
+                output_fn("")
+            return False
+        output_fn(_feedback_line(session.submit_answer(reply.answer)))
+    return True
 
 
 def run(
@@ -140,7 +218,8 @@ def run(
         error_fn: Function used to report an error.
 
     Returns:
-        0 when the quiz ends normally, 1 when the deck cannot be loaded.
+        0 when the quiz ends or the user quits, 1 when the deck cannot be
+        loaded.
     """
     args = build_parser().parse_args(argv)
     try:
@@ -149,6 +228,6 @@ def run(
     except (FlashcardLoadError, ValueError) as error:
         error_fn(f"Error: {error}")
         return EXIT_LOAD_ERROR
-    _ask_questions(session, input_fn, output_fn)
-    output_fn("Quiz finished.")
+    finished = _ask_questions(session, input_fn, output_fn)
+    output_fn("Quiz finished." if finished else "Quiz stopped.")
     return EXIT_OK
