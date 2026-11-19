@@ -420,6 +420,42 @@ For each AI interaction, create a new entry with the following structure:
 - This work again produced no wrong code from the AI. The evidence of review is in the predicted failures, the gaps that the mutations found in my own prompt, and the two deviations that I read and accepted
 
 
+### 2026-11-19 - The --limit option as a rule of the session (Prompt 5C)
+
+**Context:** I wanted an option to stop a quiz after N answered questions, useful for the large decks (for example, 10 random questions from a deck of many). The design question was where the rule belongs. A quiz mode decides which card is next, and the end of the session is a different concern, so I made the limit a rule of the session and not of a mode. That way it works with the three modes, and the console interface does not need to know which mode is running.
+
+**AI Tool Used:** Claude Code in VS Code, plus a separate Claude chat session as a planning assistant to design the rule, calculate the expected results and draft the prompt.
+
+**Prompt/Request:** One prompt in English, with the Requirements Prompt structure (Context, Requirements, Constraints, Examples) and a Verification section. It limited the changes to `quiz_engine.py`, `ui.py` and a new test file, and required that the 340 existing tests pass unchanged.
+- Rules fixed in the prompt: the limit counts answered questions, repetitions of the adaptive mode included; a question that was shown and not answered does not count; when the limit is reached the quiz ends as a normal end (`Quiz finished.`) with no extra message; a deck shorter than the limit ends when the cards run out; the adaptive mode ends at the limit even if reviews are pending; and `--limit` rejects zero, negative values and non-integers with exit code 2.
+- One decision that I wrote explicitly: when the limit is reached, `next_question()` returns `None` **without asking the mode for a card**, because a mode with state, such as the adaptive mode, would advance for a card that nobody sees. The check of an unanswered pending question had to stay first, to keep the existing contract.
+- The tests had to use a `CountingMode` that counts every call to `next_card`, so the rule can be checked directly. The expected sequences came from my independent simulation of the adaptive mode, for example A, B, C, A (review), B (review) for three cards always answered wrong with a limit of 5.
+- Because the code did not exist yet, I described the eight mutations by behavior (one question too many, checking the limit after asking the mode, counting when asked instead of when answered, accepting zero, and so on) and asked for backups of `quiz_engine.py` and `ui.py`, which had uncommitted changes.
+
+**AI Response:** Claude Code added the `max_questions` parameter to `QuizSession` with its validation, put the limit check after the pending-question check and before the call to the mode, and added `--limit` with a `_positive_int` function. It created 28 tests, and the suite reached 368 tests with 100% line and branch coverage. All eight mutations were detected. Its result for the "accept zero" mutation was 5 failing tests, which is more than the single test that I had predicted. It also defined its own `summary` and `assert_game` helpers in the new test file instead of importing the ones from the integration tests, to avoid coupling the two files.
+
+**Changes Made:**
+- Accepted the code after reading the whole diff: the order in `next_question`, the exact error message, the creation of the session inside the existing `try` block, and no change to the closing line or to the report
+- Investigated the difference in the "accept zero" mutation. The agent had written `_positive_int` with one rejection point: a text that is not an integer is converted to `0`, and the check `value < 1` rejects it. So lowering the minimum also lets `abc`, `2.5` and the empty text through. My prediction assumed two separate checks. The report was correct and my prediction was wrong
+- Noted that the helpers `summary_values` and `assert_ends_with_report` now exist in three places, and put their move to `tests/helpers.py` in the quality phase
+- Committed the three files (`4cf7bea`)
+
+**Reasoning:**
+- A limit that is a rule of the session works with every mode, and the modes stay responsible for choosing cards only. This is the same separation as the Strategy pattern of the engine
+- Returning `None` before asking the mode avoids a hidden side effect. The `CountingMode` makes the test fail if the check is moved after the call
+- Counting answered questions is consistent with the statistics and with the way `exit` works, so the number in the report always matches the number of answers
+- Predicting the result of a mutation only makes sense if I know the structure of the code. For code that does not exist yet, describing the mutations by behavior and reading the report afterwards is the honest way
+
+**Outcome:** `--limit N` works with the three modes: for example, `python main.py -m random --limit 3 -f data/glossary.json` asks three random cards and then shows the report. The real sessions matched my calculations, including the adaptive mode with a limit of 5 (three questions and two reviews). 368 tests pass, with 100% line and branch coverage in every file, and `black`, `isort`, `flake8` and `mypy` are clean. The commit is `4cf7bea`.
+
+**Lessons Learned:**
+- Deciding where a rule belongs, in the session or in a mode, before writing the prompt kept the change small: 51 lines in the source
+- A rule that must not have a side effect needs a test that observes the side effect, such as a mode that counts its calls
+- A wrong prediction of mine was explained by reading the code afterwards. The check of an AI report is useful in both directions, and the report was the correct one here
+- Asking for backups before mutating files with uncommitted changes avoided losing work, as in the previous phases
+- This feature again needed no correction of the AI code. The evidence of review is in the design decision, in the test that observes the side effect and in the investigation of a result that did not match my expectation
+
+
 
 
 
