@@ -22,39 +22,6 @@ For each AI interaction, create a new entry with the following structure:
 
 ---
 
-## Example Entry
-
-> This entry shows the expected level of detail. It does **not** count toward your five required entries. Delete it before you submit.
-
-### 2024-01-15 - Flashcard Loader Validation
-
-**Context:** I needed a module that loads flashcards from a JSON file and rejects bad data with a clear message instead of a traceback.
-
-**AI Tool Used:** Claude Code
-
-**Prompt/Request:** "Create `data_loader.py` with a function that loads flashcards from a JSON file. Support both a plain list of `{"front", "back"}` objects and a `{"cards": [...]}` wrapper. Raise a custom exception with a helpful message if the file is missing, the JSON is malformed, or a card has no `back`. Use type hints."
-
-**AI Response:** Claude generated a `load_flashcards()` function and a `FlashcardLoadError` exception. It handled both JSON formats and a missing file, but it caught every exception with a bare `except:` and only checked for `front`.
-
-**Changes Made:** 
-- Replaced the bare `except:` with specific `FileNotFoundError` and `json.JSONDecodeError` handlers
-- Added validation that every card has non-empty `front` and `back` strings
-- Added the card's position to the error message so the user can find the bad entry
-
-**Reasoning:** 
-- A bare `except:` hides real bugs, including `KeyboardInterrupt`
-- A card without a `back` would break the quiz loop later, far from the cause
-- A message that names the bad card is far easier to act on
-
-**Outcome:** The loader now rejects bad decks with one readable line, and `test_load_missing_required_field` passes.
-
-**Lessons Learned:** 
-- AI covered the happy path well but under-specified the error handling
-- Naming the exact failure cases in the prompt produced better code than asking for "error handling"
-- Each requirement in the prompt should map to a test
-
----
-
 ## Your Log Entries
 
 ### 2026-11-17 - Tooling configuration and Definition of Done (Prompt 0)
@@ -570,55 +537,6 @@ For each AI interaction, create a new entry with the following structure:
 - Read-only audits with a throwaway script are a good way to check a rule that no tool enforces, and the result gives me a figure that I can quote in the report
 - Nothing in this phase needed a correction of the AI code. The evidence of review is in my decisions on what to unify and what to leave, and in the mutation and the instruction that were corrected
 
-
-
-
-
-
-
-
-
-
-### [Date] - [Brief Description]
-
-**Context:** 
-
-**AI Tool Used:** 
-
-**Prompt/Request:** 
-
-**AI Response:** 
-
-**Changes Made:** 
-
-**Reasoning:** 
-
-**Outcome:** 
-
-**Lessons Learned:** 
-
----
-
-### [Date] - [Brief Description]
-
-**Context:** 
-
-**AI Tool Used:** 
-
-**Prompt/Request:** 
-
-**AI Response:** 
-
-**Changes Made:** 
-
-**Reasoning:** 
-
-**Outcome:** 
-
-**Lessons Learned:** 
-
----
-
 ## Tips for Effective AI Collaboration
 
 ### 1. Be Specific in Your Requests
@@ -669,24 +587,38 @@ For each AI interaction, create a new entry with the following structure:
 
 ## Reflection Questions
 
-As you work through the project, consider these questions:
+Answers at the end of the project:
 
 1. **What types of tasks did AI help with most effectively?**
+
+   Tasks with a precise specification and a way to check the result. Claude Code wrote the Strategy and Factory engine, the console interface and about 5,600 lines of tests from prompts that listed exact messages, rules and expected values. It was also very good at mechanical changes with a safety net: the final cleanup moved shared helpers across nine test files and no test was lost, which I checked by comparing the test identifiers before and after. Throwaway audit scripts gave me facts about the code that no tool checks, such as the docstrings and the duplications.
+
 2. **Where did you need to make the most modifications to AI suggestions?**
+
+   Less in the AI code than in my own specifications. The AI code needed one real correction: the docstring of `is_correct_answer` promised that an empty answer is incorrect, but the code returned True for two empty strings, and I fixed it with a prompt. The larger number of changes were to my own prompts and plans. Three times a mutation check showed a case missing from my list of tests, several of my predictions were wrong (the number of tests that a mutation would break, the output of a command), and I rejected or changed several design suggestions from the planning assistant, such as extra features, tones with `winsound` and a shadow on the banner.
+
 3. **What patterns did you notice in AI strengths and weaknesses?**
+
+   Strengths: it follows detailed instructions closely, keeps a consistent style across files, reports its own deviations (an extra helper, a test that needed `--limit 2`) and is honest about what it could not check. It even corrected two instructions of mine. Weaknesses: its summaries sometimes contain wrong numbers (92 tests for a file that had 66, 33 test cases when pytest collected 20), it cannot judge physical results such as the sound or the colors, one tool turned an escape sequence into a literal character, and it can write documentation that promises more than the code does. It follows a flawed instruction unless the verification catches the problem.
+
 4. **How did your prompting technique improve over time?**
+
+   The first prompt was in Spanish and had no structure. After that I used the Requirements Prompt pattern in English, with small and focused prompts. Later prompts included the exact error messages, expected values calculated by an independent simulation, a rule to stop and report a failing test instead of editing the source or the expectation, mutation checks with backups and hash comparisons, and my own predictions to compare with the real result. I also learned to give the literal content of configuration files and to ask for a read-only audit before a cleanup.
+
 5. **What would you do differently in future AI collaborations?**
+
+   I would write the list of tests with the mutations in mind from the start, naming the boundary cases and the behavior behind each one, because the mutations kept finding gaps in my lists. I would test the physical result of a feature, such as the sound or the colors, before building a design around it. I would set up the continuous integration and the coverage configuration earlier, and keep one shared module for the test helpers from the beginning. I would write each log entry right after its commit, and check the number of changed lines before committing a document, because a pasted entry was duplicated once and the line count revealed it.
 
 ## Summary Statistics
 
-At the end of your project, fill out these statistics:
+Final statistics of the project:
 
-- **Total AI interactions:** ___
-- **Lines of AI-generated code used:** ___
-- **Lines of AI-generated code modified:** ___
-- **Most helpful AI interaction:** ___
-- **Most challenging AI interaction:** ___
-- **Biggest lesson learned:** ___
+- **Total AI interactions:** 34 prompts to Claude Code, plus a separate Claude chat session used as a planning assistant to design each step, draft the prompts and review every result
+- **Lines of AI-generated code used:** 7,092 lines of Python in the repository, 1,475 in 9 application files and 5,617 in 15 test files. Claude Code wrote all of them from my prompts, and I wrote none by hand
+- **Lines of AI-generated code modified:** 0 lines edited by hand, because I reformulated the prompt every time. Over the whole history of the Python files, 7,700 lines were added and 608 were deleted, so at most 608 generated lines (about 8 percent) were replaced by a later prompt. That number is an upper limit, because it also counts refactorings and reformatting. The only real correction of logic was in `is_correct_answer`
+- **Most helpful AI interaction:** Prompt 2C, the tests of the quiz engine with nine mutation checks. It started two techniques that I used until the end: expected values calculated before reading the code, and temporary code changes that prove the tests can fail
+- **Most challenging AI interaction:** The sound feature (prompts 5D and 5E). The code was correct and 408 tests passed, but when I played the program the terminal bell sounded the same for a correct and an incorrect answer. Tests prove what the program sends, and only listening proves what the terminal does with it. I kept the portable solution and documented the limit
+- **Biggest lesson learned:** My own specifications had more problems than the AI code. The review of real results and the mutation checks found a case missing from my list of tests three times, while the AI code needed one real correction. The review is what makes the collaboration reliable
 
 ---
 
