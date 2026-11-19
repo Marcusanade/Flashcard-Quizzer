@@ -1,8 +1,13 @@
-"""Quiz logic for the Flashcard Quizzer: the quiz modes (Strategy pattern).
+"""Quiz logic for the Flashcard Quizzer.
 
-A quiz mode decides which flashcard is asked next. All modes share the
-``QuizMode`` interface so they can be used interchangeably. This module has
-no input or output: it knows nothing about the command line or the screen.
+This module uses two design patterns:
+
+* Strategy: ``QuizMode`` and its subclasses decide which flashcard is asked
+  next and are interchangeable. ``QuizSession`` is the context that uses one.
+* Factory: ``QuizModeFactory`` creates the mode from its name.
+
+This module has no input or output: it knows nothing about the command line
+or the screen.
 
 Modes keep state (for example how far through the deck they are), so every
 quiz session must create its own new instance.
@@ -11,6 +16,8 @@ quiz session must create its own new instance.
 import random
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import ClassVar
 
 from models import Flashcard
 
@@ -284,3 +291,185 @@ class AdaptiveMode(QuizMode):
         entry = min(entries, key=lambda item: item[1])
         self._review.remove(entry)
         return entry[0]
+
+
+class QuizModeFactory:
+    """Create quiz modes from their names.
+
+    To add a new mode, write a new ``QuizMode`` subclass and add one entry to
+    ``_registry``. Nothing else changes.
+    """
+
+    _registry: ClassVar[dict[str, type[QuizMode]]] = {
+        "sequential": SequentialMode,
+        "random": RandomMode,
+        "adaptive": AdaptiveMode,
+    }
+
+    @staticmethod
+    def create_mode(name: str, cards: Sequence[Flashcard]) -> QuizMode:
+        """Create a new mode instance.
+
+        Args:
+            name: Name of the mode. Surrounding spaces and letter case are
+                ignored.
+            cards: The deck, in file order.
+
+        Returns:
+            A new mode built with ``cards``. Modes keep state, so every call
+            returns a different object.
+
+        Raises:
+            ValueError: If the name is unknown or ``cards`` is empty.
+        """
+        mode_class = QuizModeFactory._registry.get(name.strip().lower())
+        if mode_class is None:
+            available = ", ".join(QuizModeFactory.available_modes())
+            raise ValueError(
+                f"Unknown quiz mode: '{name.strip()}'. Available modes: {available}."
+            )
+        return mode_class(cards)
+
+    @staticmethod
+    def available_modes() -> tuple[str, ...]:
+        """Return the valid mode names.
+
+        Returns:
+            The names, sorted alphabetically.
+        """
+        return tuple(sorted(QuizModeFactory._registry))
+
+
+def is_correct_answer(given: str, expected: str) -> bool:
+    """Check an answer, ignoring surrounding spaces and letter case.
+
+    Inner spaces are not collapsed. An answer that is empty after ``strip()``
+    is always incorrect, whatever the expected text is.
+
+    Args:
+        given: The text typed by the user.
+        expected: The back of the card.
+
+    Returns:
+        True if ``given`` is not empty after ``strip()`` and both strings are
+        equal after ``strip()`` and ``casefold()``. False otherwise.
+    """
+    cleaned = given.strip()
+    if not cleaned:
+        return False
+    return cleaned.casefold() == expected.strip().casefold()
+
+
+@dataclass(frozen=True)
+class AnswerResult:
+    """Outcome of one answered question.
+
+    Attributes:
+        correct: Whether the answer was correct.
+        expected: The back of the card, as stored.
+    """
+
+    correct: bool
+    expected: str
+
+
+@dataclass(frozen=True)
+class SessionStats:
+    """Statistics of a quiz session.
+
+    Attributes:
+        total_questions: Questions answered, repetitions included.
+        correct_answers: Questions answered correctly.
+        missed_terms: Fronts of the cards answered wrongly at least once,
+            without duplicates, in order of first miss.
+    """
+
+    total_questions: int
+    correct_answers: int
+    missed_terms: tuple[str, ...]
+
+    @property
+    def accuracy_percent(self) -> float:
+        """Correct answers as a percentage of the total questions.
+
+        Returns:
+            The percentage, or 0.0 if no question was answered.
+        """
+        if self.total_questions == 0:
+            return 0.0
+        return 100 * self.correct_answers / self.total_questions
+
+
+class QuizSession:
+    """Context of the Strategy pattern: runs a quiz with one mode.
+
+    The session receives a mode that nobody else uses, because modes keep
+    state. It knows nothing about the screen or the keyboard.
+    """
+
+    def __init__(self, mode: QuizMode) -> None:
+        """Start a session.
+
+        Args:
+            mode: The quiz mode that chooses the questions.
+        """
+        self._mode = mode
+        self._pending: Flashcard | None = None
+        self._total = 0
+        self._correct = 0
+        self._missed: list[Flashcard] = []
+
+    def next_question(self) -> Flashcard | None:
+        """Ask the mode for the next card and remember it as pending.
+
+        Returns:
+            The next card, or ``None`` when the mode has no more cards.
+
+        Raises:
+            ValueError: If the previous question was not answered yet.
+        """
+        if self._pending is not None:
+            raise ValueError("The current question has not been answered yet.")
+        self._pending = self._mode.next_card()
+        return self._pending
+
+    def submit_answer(self, answer: str) -> AnswerResult:
+        """Check the answer to the pending question.
+
+        Args:
+            answer: The text typed by the user.
+
+        Returns:
+            Whether the answer was correct and the expected answer.
+
+        Raises:
+            ValueError: If there is no pending question.
+        """
+        card = self._pending
+        if card is None:
+            raise ValueError("There is no question waiting for an answer.")
+        correct = is_correct_answer(answer, card.back)
+        self._mode.record_result(card, correct)
+        self._total += 1
+        if correct:
+            self._correct += 1
+        elif card not in self._missed:
+            # Two cards with identical text are the same term, so the term
+            # appears only once.
+            self._missed.append(card)
+        self._pending = None
+        return AnswerResult(correct=correct, expected=card.back)
+
+    def stats(self) -> SessionStats:
+        """Return the current statistics.
+
+        A question that was asked but not answered is not counted.
+
+        Returns:
+            The statistics so far.
+        """
+        return SessionStats(
+            total_questions=self._total,
+            correct_answers=self._correct,
+            missed_terms=tuple(card.front for card in self._missed),
+        )
