@@ -404,15 +404,26 @@ class QuizSession:
     """Context of the Strategy pattern: runs a quiz with one mode.
 
     The session receives a mode that nobody else uses, because modes keep
-    state. It knows nothing about the screen or the keyboard.
+    state. It knows nothing about the screen or the keyboard. The mode decides
+    which card is next, and the session decides when the quiz ends: after the
+    cards run out or, if a limit was given, after that many answered
+    questions.
     """
 
-    def __init__(self, mode: QuizMode) -> None:
+    def __init__(self, mode: QuizMode, max_questions: int | None = None) -> None:
         """Start a session.
 
         Args:
             mode: The quiz mode that chooses the questions.
+            max_questions: Maximum number of answered questions, or ``None``
+                for no limit.
+
+        Raises:
+            ValueError: If ``max_questions`` is less than 1.
         """
+        if max_questions is not None and max_questions < 1:
+            raise ValueError("max_questions must be at least 1.")
+        self._max_questions = max_questions
         self._mode = mode
         self._pending: Flashcard | None = None
         self._total = 0
@@ -422,14 +433,20 @@ class QuizSession:
     def next_question(self) -> Flashcard | None:
         """Ask the mode for the next card and remember it as pending.
 
+        When the limit was reached the mode is not asked, so a mode with state
+        does not advance for a card that nobody sees.
+
         Returns:
-            The next card, or ``None`` when the mode has no more cards.
+            The next card, or ``None`` when the mode has no more cards or the
+            limit was reached.
 
         Raises:
             ValueError: If the previous question was not answered yet.
         """
         if self._pending is not None:
             raise ValueError("The current question has not been answered yet.")
+        if self._max_questions is not None and self._total >= self._max_questions:
+            return None
         self._pending = self._mode.next_card()
         return self._pending
 

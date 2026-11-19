@@ -60,6 +60,28 @@ def _print_error(message: str) -> None:
     print(message, file=sys.stderr)
 
 
+def _positive_int(text: str) -> int:
+    """Convert a command line text to an integer greater than zero.
+
+    Args:
+        text: The text typed by the user.
+
+    Returns:
+        The integer.
+
+    Raises:
+        argparse.ArgumentTypeError: If the text is not an integer or is less
+            than 1.
+    """
+    try:
+        value = int(text)
+    except ValueError:
+        value = 0
+    if value < 1:
+        raise argparse.ArgumentTypeError(f"must be a positive integer: {text!r}")
+    return value
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the command line parser.
 
@@ -85,6 +107,13 @@ def build_parser() -> argparse.ArgumentParser:
         default="sequential",
         type=str.lower,
         help=f"quiz mode: {', '.join(modes)} (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--limit",
+        type=_positive_int,
+        default=None,
+        metavar="N",
+        help="stop after N answered questions (repeated questions count)",
     )
     parser.add_argument(
         "--stats",
@@ -458,7 +487,8 @@ def run(
     args = build_parser().parse_args(argv)
     try:
         cards = load_flashcards(args.file)
-        session = QuizSession(QuizModeFactory.create_mode(args.mode, cards))
+        mode = QuizModeFactory.create_mode(args.mode, cards)
+        session = QuizSession(mode, max_questions=args.limit)
     except (FlashcardLoadError, ValueError) as error:
         error_fn(f"Error: {error}")
         return EXIT_LOAD_ERROR
