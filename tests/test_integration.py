@@ -18,7 +18,15 @@ import ui
 from data_loader import load_flashcards
 from models import Flashcard
 from quiz_engine import AnswerResult, QuizModeFactory, QuizSession
-from tests.helpers import LineRecorder, green, red, run_ui, write_deck
+from tests.helpers import (
+    LineRecorder,
+    ParsedReport,
+    green,
+    parse_report,
+    red,
+    run_ui,
+    write_deck,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
@@ -46,110 +54,13 @@ PYTHON_BASICS = [
     ("Which keyword imports a module?", "import"),
 ]
 
-SHORT_3_66 = [
-    "+-----------------+-------+",
-    "| Statistic       | Value |",
-    "+-----------------+-------+",
-    "| Total questions | 3     |",
-    "| Accuracy        | 66.7% |",
-    "+-----------------+-------+",
-]
-SHORT_3_0 = [
-    "+-----------------+-------+",
-    "| Statistic       | Value |",
-    "+-----------------+-------+",
-    "| Total questions | 3     |",
-    "| Accuracy        | 0.0%  |",
-    "+-----------------+-------+",
-]
-SHORT_9_88 = [
-    "+-----------------+-------+",
-    "| Statistic       | Value |",
-    "+-----------------+-------+",
-    "| Total questions | 9     |",
-    "| Accuracy        | 88.9% |",
-    "+-----------------+-------+",
-]
-SHORT_20_50 = [
-    "+-----------------+-------+",
-    "| Statistic       | Value |",
-    "+-----------------+-------+",
-    "| Total questions | 20    |",
-    "| Accuracy        | 50.0% |",
-    "+-----------------+-------+",
-]
-SHORT_30_0 = [
-    "+-----------------+-------+",
-    "| Statistic       | Value |",
-    "+-----------------+-------+",
-    "| Total questions | 30    |",
-    "| Accuracy        | 0.0%  |",
-    "+-----------------+-------+",
-]
-SHORT_1_100 = [
-    "+-----------------+--------+",
-    "| Statistic       | Value  |",
-    "+-----------------+--------+",
-    "| Total questions | 1      |",
-    "| Accuracy        | 100.0% |",
-    "+-----------------+--------+",
-]
-SHORT_2_100 = [
-    "+-----------------+--------+",
-    "| Statistic       | Value  |",
-    "+-----------------+--------+",
-    "| Total questions | 2      |",
-    "| Accuracy        | 100.0% |",
-    "+-----------------+--------+",
-]
-SHORT_8_100 = [
-    "+-----------------+--------+",
-    "| Statistic       | Value  |",
-    "+-----------------+--------+",
-    "| Total questions | 8      |",
-    "| Accuracy        | 100.0% |",
-    "+-----------------+--------+",
-]
-SHORT_10_100 = [
-    "+-----------------+--------+",
-    "| Statistic       | Value  |",
-    "+-----------------+--------+",
-    "| Total questions | 10     |",
-    "| Accuracy        | 100.0% |",
-    "+-----------------+--------+",
-]
-FULL_GLOSSARY_SEQ_ALL_WRONG = [
-    "+-----------------------+--------------------+",
-    "| Statistic             | Value              |",
-    "+-----------------------+--------------------+",
-    "| Mode                  | sequential         |",
-    "| Deck file             | data/glossary.json |",
-    "| Deck size             | 10                 |",
-    "| Session               | finished           |",
-    "| Total questions       | 10                 |",
-    "| Correct answers       | 0                  |",
-    "| Incorrect answers     | 10                 |",
-    "| Accuracy              | 0.0%               |",
-    "| Distinct cards missed | 10                 |",
-    "+-----------------------+--------------------+",
-]
-FULL_PYTHON_ADAPTIVE_ALL_WRONG = [
-    "+-----------------------+-------------------------+",
-    "| Statistic             | Value                   |",
-    "+-----------------------+-------------------------+",
-    "| Mode                  | adaptive                |",
-    "| Deck file             | data/python_basics.json |",
-    "| Deck size             | 8                       |",
-    "| Session               | finished                |",
-    "| Total questions       | 24                      |",
-    "| Correct answers       | 0                       |",
-    "| Incorrect answers     | 24                      |",
-    "| Accuracy              | 0.0%                    |",
-    "| Distinct cards missed | 8                       |",
-    "+-----------------------+-------------------------+",
-]
-
-MISSED_NONE = ["Missed terms: none"]
+# The layout of the report box is pinned in tests/test_ui.py. These tests check
+# the numbers and the missed terms of real games.
+ACC_ZERO = "[--------------------]   0.0%"
+ACC_HALF = "[##########----------]  50.0%"
+ACC_TWO_THIRDS = "[#############-------]  66.7%"
+ACC_88 = "[##################--]  88.9%"
+ACC_FULL = "[####################] 100.0%"
 QUESTION_PATTERN = r"^Q(\d+)( \(review\))?: (.*)$"
 
 
@@ -171,9 +82,45 @@ def expected_game_lines(
     return lines
 
 
-def missed_lines(fronts: Sequence[str]) -> list[str]:
-    """Build the expected missed terms lines for the given fronts."""
-    return ["Missed terms:"] + [f"  - {front}" for front in fronts]
+def summary_values(total: str, accuracy: str, rank: str) -> dict[str, str]:
+    """Build the expected values of a summary box."""
+    return {"Total questions": total, "Accuracy": accuracy, "Rank": rank}
+
+
+def full_values(
+    mode: str,
+    deck_file: str,
+    size: str,
+    session: str,
+    total: str,
+    correct: str,
+    incorrect: str,
+    accuracy: str,
+    rank: str,
+) -> dict[str, str]:
+    """Build the expected values of the full report box."""
+    return {
+        "Mode": mode,
+        "Deck file": deck_file,
+        "Deck size": size,
+        "Session": session,
+        "Total questions": total,
+        "Correct answers": correct,
+        "Incorrect answers": incorrect,
+        "Accuracy": accuracy,
+        "Rank": rank,
+    }
+
+
+def assert_ends_with_report(
+    output: Sequence[str],
+    prefix: Sequence[str],
+    values: dict[str, str],
+    missed: Sequence[str],
+) -> None:
+    """Assert the lines before the box and the content of the box."""
+    assert output[: len(prefix)] == list(prefix)
+    assert parse_report(output[len(prefix) :]) == ParsedReport(values, list(missed))
 
 
 class Learner:
@@ -275,20 +222,19 @@ def test_full_session_through_the_cli() -> None:
     )
 
     assert result.exit_code == 0
-    assert result.output == (
-        [
-            "Q1: API",
-            green("Correct!"),
-            "Q2: CDN",
-            red("Incorrect. Answer: Content Delivery Network"),
-            "Q3: CPU",
-            green("Correct!"),
-            "Q4: DNS",
-            "Quiz stopped.",
-            "",
-        ]
-        + SHORT_3_66
-        + ["Missed terms:", "  - CDN"]
+    prefix = [
+        "Q1: API",
+        green("Correct!"),
+        "Q2: CDN",
+        red("Incorrect. Answer: Content Delivery Network"),
+        "Q3: CPU",
+        green("Correct!"),
+        "Q4: DNS",
+        "Quiz stopped.",
+        "",
+    ]
+    assert_ends_with_report(
+        result.output, prefix, summary_values("3", ACC_TWO_THIRDS, "C"), ["CDN"]
     )
 
 
@@ -297,11 +243,12 @@ def test_glossary_sequential_all_correct() -> None:
 
     result = run_ui(argv, *[back for _, back in GLOSSARY])
 
-    assert result.output == (
-        expected_game_lines(GLOSSARY, range(1, 11), [True] * 10)
-        + ["Quiz finished.", ""]
-        + SHORT_10_100
-        + MISSED_NONE
+    prefix = expected_game_lines(GLOSSARY, range(1, 11), [True] * 10)
+    assert_ends_with_report(
+        result.output,
+        prefix + ["Quiz finished.", ""],
+        summary_values("10", ACC_FULL, "S"),
+        [],
     )
 
 
@@ -312,11 +259,23 @@ def test_glossary_sequential_all_wrong_with_stats(
 
     result = run_ui(["-f", "data/glossary.json", "--stats"], *["x"] * 10)
 
-    assert result.output == (
-        expected_game_lines(GLOSSARY, range(1, 11), [False] * 10)
-        + ["Quiz finished.", ""]
-        + FULL_GLOSSARY_SEQ_ALL_WRONG
-        + missed_lines([front for front, _ in GLOSSARY])
+    prefix = expected_game_lines(GLOSSARY, range(1, 11), [False] * 10)
+    values = full_values(
+        "sequential",
+        "data/glossary.json",
+        "10",
+        "finished",
+        "10",
+        "0",
+        "10",
+        ACC_ZERO,
+        "D",
+    )
+    assert_ends_with_report(
+        result.output,
+        prefix + ["Quiz finished.", ""],
+        values,
+        [front for front, _ in GLOSSARY],
     )
 
 
@@ -325,11 +284,12 @@ def test_python_basics_object_format_sequential_all_correct() -> None:
 
     result = run_ui(argv, *[back for _, back in PYTHON_BASICS])
 
-    assert result.output == (
-        expected_game_lines(PYTHON_BASICS, range(1, 9), [True] * 8)
-        + ["Quiz finished.", ""]
-        + SHORT_8_100
-        + MISSED_NONE
+    prefix = expected_game_lines(PYTHON_BASICS, range(1, 9), [True] * 8)
+    assert_ends_with_report(
+        result.output,
+        prefix + ["Quiz finished.", ""],
+        summary_values("8", ACC_FULL, "S"),
+        [],
     )
 
 
@@ -350,11 +310,24 @@ def test_python_basics_adaptive_all_wrong_retires_every_card_after_three_failure
 
     assert code == 0
     assert errors == []
-    assert output == (
-        expected_game_lines(PYTHON_BASICS, positions, [False] * 24)
-        + ["Quiz finished.", ""]
-        + FULL_PYTHON_ADAPTIVE_ALL_WRONG
-        + missed_lines([front for front, _ in PYTHON_BASICS])
+    # The long fronts are wrapped in the box, and the reader joins them.
+    prefix = expected_game_lines(PYTHON_BASICS, positions, [False] * 24)
+    values = full_values(
+        "adaptive",
+        "data/python_basics.json",
+        "8",
+        "finished",
+        "24",
+        "0",
+        "24",
+        ACC_ZERO,
+        "D",
+    )
+    assert_ends_with_report(
+        output,
+        prefix + ["Quiz finished.", ""],
+        values,
+        [front for front, _ in PYTHON_BASICS],
     )
 
 
@@ -369,14 +342,12 @@ def test_python_basics_adaptive_game_played_by_hand() -> None:
         argv, "def", "len", "for", "bool", "raise", "int", "dict", "except", "import"
     )
 
-    assert result.output == (
-        expected_game_lines(PYTHON_BASICS, positions, correct)
-        + ["Quiz finished.", ""]
-        + SHORT_9_88
-        + [
-            "Missed terms:",
-            "  - Which keyword handles an exception raised in a try block?",
-        ]
+    prefix = expected_game_lines(PYTHON_BASICS, positions, correct)
+    assert_ends_with_report(
+        result.output,
+        prefix + ["Quiz finished.", ""],
+        summary_values("9", ACC_88, "B"),
+        ["Which keyword handles an exception raised in a try block?"],
     )
 
 
@@ -393,11 +364,11 @@ def test_glossary_adaptive_each_card_fails_once_then_is_answered_correctly() -> 
 
     assert code == 0
     assert errors == []
-    assert output == (
-        expected_game_lines(GLOSSARY, positions, correct)
-        + ["Quiz finished.", ""]
-        + SHORT_20_50
-        + missed_lines([front for front, _ in GLOSSARY])
+    assert_ends_with_report(
+        output,
+        expected_game_lines(GLOSSARY, positions, correct) + ["Quiz finished.", ""],
+        summary_values("20", ACC_HALF, "D"),
+        [front for front, _ in GLOSSARY],
     )
 
 
@@ -413,11 +384,11 @@ def test_glossary_adaptive_always_wrong() -> None:
 
     assert code == 0
     assert errors == []
-    assert output == (
-        expected_game_lines(GLOSSARY, positions, [False] * 30)
-        + ["Quiz finished.", ""]
-        + SHORT_30_0
-        + missed_lines([front for front, _ in GLOSSARY])
+    assert_ends_with_report(
+        output,
+        expected_game_lines(GLOSSARY, positions, [False] * 30) + ["Quiz finished.", ""],
+        summary_values("30", ACC_ZERO, "D"),
+        [front for front, _ in GLOSSARY],
     )
 
 
@@ -436,7 +407,10 @@ def test_glossary_random_mode_asks_every_card_once() -> None:
     assert sorted(question_fronts(output)) == sorted(front for front, _ in GLOSSARY)
     assert not any("(review)" in line for line in output)
     assert output[1:20:2] == [green("Correct!")] * 10
-    assert output[20:] == ["Quiz finished.", ""] + SHORT_10_100 + MISSED_NONE
+    assert output[20:22] == ["Quiz finished.", ""]
+    assert parse_report(output[22:]) == ParsedReport(
+        summary_values("10", ACC_FULL, "S"), []
+    )
 
 
 def test_random_mode_through_the_cli_does_not_always_follow_file_order() -> None:
@@ -466,8 +440,9 @@ def test_one_card_deck_answered_correctly_in_every_mode(
 
     result = run_ui(["-m", mode, "-f", str(path)], "a")
 
-    assert result.output == (
-        ["Q1: A", green("Correct!"), "Quiz finished.", ""] + SHORT_1_100 + MISSED_NONE
+    prefix = ["Q1: A", green("Correct!"), "Quiz finished.", ""]
+    assert_ends_with_report(
+        result.output, prefix, summary_values("1", ACC_FULL, "S"), []
     )
 
 
@@ -476,19 +451,18 @@ def test_one_card_deck_adaptive_wrong_three_times(tmp_path: Path) -> None:
 
     result = run_ui(["-m", "adaptive", "-f", str(path)], "x", "x", "x")
 
-    assert result.output == (
-        [
-            "Q1: A",
-            red("Incorrect. Answer: a"),
-            "Q2 (review): A",
-            red("Incorrect. Answer: a"),
-            "Q3 (review): A",
-            red("Incorrect. Answer: a"),
-            "Quiz finished.",
-            "",
-        ]
-        + SHORT_3_0
-        + ["Missed terms:", "  - A"]
+    prefix = [
+        "Q1: A",
+        red("Incorrect. Answer: a"),
+        "Q2 (review): A",
+        red("Incorrect. Answer: a"),
+        "Q3 (review): A",
+        red("Incorrect. Answer: a"),
+        "Quiz finished.",
+        "",
+    ]
+    assert_ends_with_report(
+        result.output, prefix, summary_values("3", ACC_ZERO, "D"), ["A"]
     )
 
 
@@ -497,10 +471,9 @@ def test_real_deck_answers_ignore_spaces_and_case() -> None:
 
     result = run_ui(argv, "  APPLICATION programming INTERFACE  ", "exit")
 
-    assert result.output == (
-        ["Q1: API", green("Correct!"), "Q2: CDN", "Quiz stopped.", ""]
-        + SHORT_1_100
-        + MISSED_NONE
+    prefix = ["Q1: API", green("Correct!"), "Q2: CDN", "Quiz stopped.", ""]
+    assert_ends_with_report(
+        result.output, prefix, summary_values("1", ACC_FULL, "S"), []
     )
 
 
@@ -513,17 +486,16 @@ def test_non_ascii_deck_is_read_as_utf8_and_compared_with_casefold(
 
     result = run_ui(["-f", str(path)], "É", "STRASSE")
 
-    assert result.output == (
-        [
-            "Q1: ñ",
-            green("Correct!"),
-            "Q2: Über",
-            green("Correct!"),
-            "Quiz finished.",
-            "",
-        ]
-        + SHORT_2_100
-        + MISSED_NONE
+    prefix = [
+        "Q1: ñ",
+        green("Correct!"),
+        "Q2: Über",
+        green("Correct!"),
+        "Quiz finished.",
+        "",
+    ]
+    assert_ends_with_report(
+        result.output, prefix, summary_values("2", ACC_FULL, "S"), []
     )
 
 
@@ -548,11 +520,12 @@ def test_main_script_in_a_separate_process() -> None:
     )
 
     lines = completed.stdout.splitlines()
-    non_empty = [line for line in lines if line.strip()]
+    box_start = next(i for i, line in enumerate(lines) if line.startswith("+="))
     assert completed.returncode == 0
     assert completed.stderr == ""
     assert "Quiz finished." in completed.stdout
     assert completed.stdout.count(green("Correct!")) == 10
-    assert "| Total questions | 10     |" in lines
-    assert "| Accuracy        | 100.0% |" in lines
-    assert non_empty[-1] == "Missed terms: none"
+    assert lines[box_start - 2 : box_start] == ["Quiz finished.", ""]
+    assert parse_report(lines[box_start:]) == ParsedReport(
+        summary_values("10", ACC_FULL, "S"), []
+    )

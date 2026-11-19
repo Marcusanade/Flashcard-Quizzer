@@ -209,3 +209,98 @@ def run_ui(
         errors=errors.lines,
         prompts=scripted.prompts,
     )
+
+
+@dataclass(frozen=True)
+class ParsedReport:
+    """The content of a statistics box, read back as data.
+
+    Attributes:
+        values: The ``label / value`` rows, by label.
+        missed_terms: The missed terms, in the order shown.
+    """
+
+    values: dict[str, str]
+    missed_terms: list[str]
+
+
+def _check_report_lines(lines: Sequence[str]) -> None:
+    """Check the borders and the shape of every line of a report.
+
+    Args:
+        lines: The lines of one box.
+
+    Raises:
+        AssertionError: If a border is missing, a line does not have 60
+            characters or a line is neither a border nor a row.
+    """
+    if not lines or not lines[0].startswith("+="):
+        raise AssertionError("The report must start with a border")
+    if not lines[-1].startswith("+="):
+        raise AssertionError("The report must end with a border")
+    for line in lines:
+        if len(line) != 60:
+            raise AssertionError(f"Every line must have 60 characters: {line!r}")
+        is_row = line.startswith("| ") and line.endswith(" |")
+        if not (line.startswith("+") or is_row):
+            raise AssertionError(f"Unexpected line: {line!r}")
+
+
+def _add_missed_row(missed: list[str], text: str, has_terms: bool) -> None:
+    """Add one row of the missed terms section to the list of terms.
+
+    Args:
+        missed: The terms read so far, changed in place.
+        text: The 56 characters of the row.
+        has_terms: False if the section title said that there are none.
+
+    Raises:
+        AssertionError: If the row is not allowed at this point.
+    """
+    if has_terms and text.startswith("  - "):
+        missed.append(text[4:].rstrip())
+    elif has_terms and text.startswith("    "):
+        if not missed:
+            raise AssertionError("A continuation row comes before any term")
+        missed[-1] += " " + text.strip()
+    else:
+        raise AssertionError(f"Unexpected row in the missed terms: {text!r}")
+
+
+def parse_report(lines: Sequence[str]) -> ParsedReport:
+    """Read the lines of one statistics box.
+
+    It does not use anything from ``ui``, so it checks the box from the
+    outside. The title row is skipped. Wrapped terms are joined with one
+    space, which is exact when the wrap happens at a space (true for the
+    real decks).
+
+    Args:
+        lines: The lines of ONE box, from the first border to the last.
+
+    Returns:
+        The label/value rows and the missed terms.
+
+    Raises:
+        AssertionError: If the lines are not a well formed box.
+    """
+    _check_report_lines(lines)
+    rows = [line[2:58] for line in lines if line.startswith("| ")][1:]
+    values: dict[str, str] = {}
+    missed: list[str] = []
+    in_missed_section = False
+    has_terms = False
+    for text in rows:
+        if in_missed_section:
+            _add_missed_row(missed, text, has_terms)
+        elif text.startswith("Missed terms"):
+            in_missed_section = True
+            has_terms = text.strip() != "Missed terms: none"
+        else:
+            label = text[:19].strip()
+            if label in values:
+                raise AssertionError(f"Duplicate label: {label!r}")
+            values[label] = text[19:].strip()
+    if not in_missed_section:
+        raise AssertionError("The report has no missed terms section")
+    return ParsedReport(values, missed)

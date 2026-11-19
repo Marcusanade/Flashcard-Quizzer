@@ -7,6 +7,7 @@ deck loading in ``data_loader``: this module only talks to the user.
 
 import argparse
 import sys
+import textwrap
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
@@ -17,7 +18,12 @@ from quiz_engine import AnswerResult, QuizModeFactory, QuizSession, SessionStats
 EXIT_OK = 0
 EXIT_LOAD_ERROR = 1
 
-TABLE_HEADER = ("Statistic", "Value")
+REPORT_WIDTH = 60
+BAR_CELLS = 20
+LABEL_WIDTH = 19
+REPORT_TITLE = "SESSION REPORT"
+TEXT_WIDTH = REPORT_WIDTH - 4
+VALUE_WIDTH = TEXT_WIDTH - LABEL_WIDTH
 
 GREEN = "\033[32m"
 RED = "\033[31m"
@@ -205,44 +211,113 @@ def _ask_questions(
     return True
 
 
-def _format_table(rows: Sequence[tuple[str, str]]) -> list[str]:
-    """Build a two-column ASCII table.
-
-    Each column is as wide as its longest text, header included.
+def _border(fill: str) -> str:
+    """Build a horizontal border of the report box.
 
     Args:
-        rows: The data rows, as pairs of texts. The header row is added.
+        fill: The character that fills the border, ``=`` or ``-``.
 
     Returns:
-        The lines of the table: border, header, border, rows, border.
+        A line of ``REPORT_WIDTH`` characters.
     """
-    width1 = max(len(first) for first, _ in (TABLE_HEADER, *rows))
-    width2 = max(len(second) for _, second in (TABLE_HEADER, *rows))
-    border = "+" + "-" * (width1 + 2) + "+" + "-" * (width2 + 2) + "+"
-
-    def row_line(first: str, second: str) -> str:
-        """Format one table row."""
-        return f"| {first.ljust(width1)} | {second.ljust(width2)} |"
-
-    lines = [border, row_line(*TABLE_HEADER), border]
-    lines.extend(row_line(first, second) for first, second in rows)
-    lines.append(border)
-    return lines
+    return "+" + fill * (REPORT_WIDTH - 2) + "+"
 
 
-def _missed_terms_lines(missed: Sequence[str]) -> list[str]:
-    """Build the lines that list the missed terms.
+def _row(text: str) -> str:
+    """Build one row of the report box.
 
     Args:
-        missed: The missed terms, in order of first miss.
+        text: The text of the row, at most ``TEXT_WIDTH`` characters.
 
     Returns:
-        ``Missed terms: none`` if there are none, otherwise a title line
-        followed by one ``  - <term>`` line per term.
+        The text left-justified between the side bars.
     """
-    if not missed:
-        return ["Missed terms: none"]
-    return ["Missed terms:", *(f"  - {term}" for term in missed)]
+    return "| " + text.ljust(TEXT_WIDTH) + " |"
+
+
+def _title_row(title: str) -> str:
+    """Build the row that shows the title, centered.
+
+    Args:
+        title: The title text.
+
+    Returns:
+        The row with the centered title.
+    """
+    return _row(title.center(TEXT_WIDTH))
+
+
+def _fit(text: str, width: int) -> str:
+    """Shorten a text that does not fit, keeping its end.
+
+    The end is kept because the end of a path is the useful part.
+
+    Args:
+        text: The text to fit.
+        width: The maximum number of characters.
+
+    Returns:
+        The same text if it fits, otherwise ``...`` followed by the last
+        ``width - 3`` characters.
+    """
+    if len(text) <= width:
+        return text
+    return "..." + text[len(text) - (width - 3) :]
+
+
+def _pair_row(label: str, value: str) -> str:
+    """Build a ``label / value`` row.
+
+    Args:
+        label: The label, shown in a column of ``LABEL_WIDTH`` characters.
+        value: The value, shortened if it is longer than ``VALUE_WIDTH``.
+
+    Returns:
+        The row.
+    """
+    return _row(label.ljust(LABEL_WIDTH) + _fit(value, VALUE_WIDTH))
+
+
+def _accuracy_bar(correct: int, total: int) -> str:
+    """Build the accuracy bar with integer arithmetic only.
+
+    Args:
+        correct: Number of correct answers.
+        total: Number of questions.
+
+    Returns:
+        ``BAR_CELLS`` cells between square brackets, ``#`` for the filled
+        ones. The filled cells are ``20 * correct / total`` rounded half up,
+        and none if there are no questions.
+    """
+    filled = 0
+    if total > 0:
+        filled = (40 * correct + total) // (2 * total)
+    return "[" + "#" * filled + "-" * (BAR_CELLS - filled) + "]"
+
+
+def _rank(correct: int, total: int) -> str:
+    """Compute the rank letter with integer arithmetic only.
+
+    Args:
+        correct: Number of correct answers.
+        total: Number of questions.
+
+    Returns:
+        ``-`` with no questions, otherwise S (all correct), A (at least 90%),
+        B (at least 75%), C (at least 60%) or D.
+    """
+    if total == 0:
+        return "-"
+    if correct == total:
+        return "S"
+    if 10 * correct >= 9 * total:
+        return "A"
+    if 4 * correct >= 3 * total:
+        return "B"
+    if 5 * correct >= 3 * total:
+        return "C"
+    return "D"
 
 
 def _accuracy_text(stats: SessionStats) -> str:
@@ -257,6 +332,50 @@ def _accuracy_text(stats: SessionStats) -> str:
     return f"{stats.accuracy_percent:.1f}%"
 
 
+def _accuracy_cell(stats: SessionStats) -> str:
+    """Build the value of the accuracy row: the bar and the percentage.
+
+    Args:
+        stats: The session statistics.
+
+    Returns:
+        The bar, a space and the accuracy text right-aligned in 6 characters.
+    """
+    bar = _accuracy_bar(stats.correct_answers, stats.total_questions)
+    return bar + " " + _accuracy_text(stats).rjust(6)
+
+
+def _missed_rows(missed: Sequence[str]) -> list[str]:
+    """Build the rows that list the missed terms.
+
+    Args:
+        missed: The missed terms, in order of first miss.
+
+    Returns:
+        One row ``Missed terms: none`` if there are none, otherwise a title
+        row followed by the wrapped terms. The first line of each term starts
+        with ``  - `` and the following lines with four spaces.
+    """
+    if not missed:
+        return [_row("Missed terms: none")]
+    rows = [_row("Missed terms")]
+    for term in missed:
+        parts = textwrap.wrap(term, width=TEXT_WIDTH - 4, break_long_words=True)
+        for index, part in enumerate(parts):
+            prefix = "  - " if index == 0 else "    "
+            rows.append(_row(prefix + part))
+    return rows
+
+
+def _head_lines() -> list[str]:
+    """Build the top border, the title row and the border below it.
+
+    Returns:
+        The three lines.
+    """
+    return [_border("="), _title_row(REPORT_TITLE), _border("=")]
+
+
 def _summary_lines(stats: SessionStats) -> list[str]:
     """Build the short summary shown at the end of the quiz.
 
@@ -264,14 +383,17 @@ def _summary_lines(stats: SessionStats) -> list[str]:
         stats: The session statistics.
 
     Returns:
-        The table with the total questions and the accuracy, followed by the
-        missed terms.
+        The complete box, missed terms included.
     """
-    rows = [
-        ("Total questions", str(stats.total_questions)),
-        ("Accuracy", _accuracy_text(stats)),
+    return [
+        *_head_lines(),
+        _pair_row("Total questions", str(stats.total_questions)),
+        _pair_row("Accuracy", _accuracy_cell(stats)),
+        _pair_row("Rank", _rank(stats.correct_answers, stats.total_questions)),
+        _border("-"),
+        *_missed_rows(stats.missed_terms),
+        _border("="),
     ]
-    return _format_table(rows) + _missed_terms_lines(stats.missed_terms)
 
 
 def _report_lines(
@@ -291,20 +413,25 @@ def _report_lines(
         finished: True if the cards ran out, False if the user quit.
 
     Returns:
-        The table with all the rows, followed by the missed terms.
+        The complete box, missed terms included.
     """
-    rows = [
-        ("Mode", mode),
-        ("Deck file", deck_file),
-        ("Deck size", str(deck_size)),
-        ("Session", "finished" if finished else "stopped"),
-        ("Total questions", str(stats.total_questions)),
-        ("Correct answers", str(stats.correct_answers)),
-        ("Incorrect answers", str(stats.total_questions - stats.correct_answers)),
-        ("Accuracy", _accuracy_text(stats)),
-        ("Distinct cards missed", str(len(stats.missed_terms))),
+    incorrect = stats.total_questions - stats.correct_answers
+    return [
+        *_head_lines(),
+        _pair_row("Mode", mode),
+        _pair_row("Deck file", deck_file),
+        _pair_row("Deck size", str(deck_size)),
+        _pair_row("Session", "finished" if finished else "stopped"),
+        _border("-"),
+        _pair_row("Total questions", str(stats.total_questions)),
+        _pair_row("Correct answers", str(stats.correct_answers)),
+        _pair_row("Incorrect answers", str(incorrect)),
+        _pair_row("Accuracy", _accuracy_cell(stats)),
+        _pair_row("Rank", _rank(stats.correct_answers, stats.total_questions)),
+        _border("-"),
+        *_missed_rows(stats.missed_terms),
+        _border("="),
     ]
-    return _format_table(rows) + _missed_terms_lines(stats.missed_terms)
 
 
 def run(

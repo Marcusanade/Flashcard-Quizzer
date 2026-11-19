@@ -1,7 +1,7 @@
 """Unit tests for the console interface (``ui.py``) and for ``main.py``.
 
-The expected tables are written by hand as literal lists, never built with
-functions from ``ui``, so a change in the layout is detected.
+The expected report boxes are written by hand as literal lists, never built
+with functions from ``ui``, so a change in the layout is detected.
 """
 
 import io
@@ -31,161 +31,352 @@ from tests.helpers import (
 )
 from ui import (
     ReadResult,
+    _accuracy_bar,
     _accuracy_text,
     _ask_questions,
+    _border,
     _feedback_line,
-    _format_table,
-    _missed_terms_lines,
+    _fit,
+    _missed_rows,
+    _pair_row,
     _question_label,
     _question_line,
+    _rank,
     _read_answer,
     _report_lines,
+    _row,
     _summary_lines,
+    _title_row,
     build_parser,
 )
 
-SHORT_3_66 = [
-    "+-----------------+-------+",
-    "| Statistic       | Value |",
-    "+-----------------+-------+",
-    "| Total questions | 3     |",
-    "| Accuracy        | 66.7% |",
-    "+-----------------+-------+",
+HEAD = [
+    "+==========================================================+",
+    "|                      SESSION REPORT                      |",
+    "+==========================================================+",
 ]
-SHORT_7_57 = [
-    "+-----------------+-------+",
-    "| Statistic       | Value |",
-    "+-----------------+-------+",
-    "| Total questions | 7     |",
-    "| Accuracy        | 57.1% |",
-    "+-----------------+-------+",
-]
-SHORT_1_0 = [
-    "+-----------------+-------+",
-    "| Statistic       | Value |",
-    "+-----------------+-------+",
-    "| Total questions | 1     |",
-    "| Accuracy        | 0.0%  |",
-    "+-----------------+-------+",
-]
-SHORT_0_0 = [
-    "+-----------------+-------+",
-    "| Statistic       | Value |",
-    "+-----------------+-------+",
-    "| Total questions | 0     |",
-    "| Accuracy        | 0.0%  |",
-    "+-----------------+-------+",
-]
-SHORT_1_100 = [
-    "+-----------------+--------+",
-    "| Statistic       | Value  |",
-    "+-----------------+--------+",
-    "| Total questions | 1      |",
-    "| Accuracy        | 100.0% |",
-    "+-----------------+--------+",
-]
-SHORT_2_100 = [
-    "+-----------------+--------+",
-    "| Statistic       | Value  |",
-    "+-----------------+--------+",
-    "| Total questions | 2      |",
-    "| Accuracy        | 100.0% |",
-    "+-----------------+--------+",
-]
-SHORT_3_100 = [
-    "+-----------------+--------+",
-    "| Statistic       | Value  |",
-    "+-----------------+--------+",
-    "| Total questions | 3      |",
-    "| Accuracy        | 100.0% |",
-    "+-----------------+--------+",
-]
-SHORT_2_50 = [
-    "+-----------------+-------+",
-    "| Statistic       | Value |",
-    "+-----------------+-------+",
-    "| Total questions | 2     |",
-    "| Accuracy        | 50.0% |",
-    "+-----------------+-------+",
-]
-FULL_SEQ_3_2 = [
-    "+-----------------------+------------+",
-    "| Statistic             | Value      |",
-    "+-----------------------+------------+",
-    "| Mode                  | sequential |",
-    "| Deck file             | deck.json  |",
-    "| Deck size             | 3          |",
-    "| Session               | finished   |",
-    "| Total questions       | 3          |",
-    "| Correct answers       | 2          |",
-    "| Incorrect answers     | 1          |",
-    "| Accuracy              | 66.7%      |",
-    "| Distinct cards missed | 1          |",
-    "+-----------------------+------------+",
-]
-FULL_SEQ_ALL_WRONG = [
-    "+-----------------------+------------+",
-    "| Statistic             | Value      |",
-    "+-----------------------+------------+",
-    "| Mode                  | sequential |",
-    "| Deck file             | deck.json  |",
-    "| Deck size             | 3          |",
-    "| Session               | finished   |",
-    "| Total questions       | 3          |",
-    "| Correct answers       | 0          |",
-    "| Incorrect answers     | 3          |",
-    "| Accuracy              | 0.0%       |",
-    "| Distinct cards missed | 3          |",
-    "+-----------------------+------------+",
-]
-FULL_ADAPTIVE_7_4 = [
-    "+-----------------------+-----------+",
-    "| Statistic             | Value     |",
-    "+-----------------------+-----------+",
-    "| Mode                  | adaptive  |",
-    "| Deck file             | deck.json |",
-    "| Deck size             | 5         |",
-    "| Session               | finished  |",
-    "| Total questions       | 7         |",
-    "| Correct answers       | 4         |",
-    "| Incorrect answers     | 3         |",
-    "| Accuracy              | 57.1%     |",
-    "| Distinct cards missed | 1         |",
-    "+-----------------------+-----------+",
-]
-FULL_ADAPTIVE_STOPPED_1 = [
-    "+-----------------------+-----------+",
-    "| Statistic             | Value     |",
-    "+-----------------------+-----------+",
-    "| Mode                  | adaptive  |",
-    "| Deck file             | deck.json |",
-    "| Deck size             | 5         |",
-    "| Session               | stopped   |",
-    "| Total questions       | 1         |",
-    "| Correct answers       | 1         |",
-    "| Incorrect answers     | 0         |",
-    "| Accuracy              | 100.0%    |",
-    "| Distinct cards missed | 0         |",
-    "+-----------------------+-----------+",
-]
-FULL_RANDOM_STOPPED_0 = [
-    "+-----------------------+-----------+",
-    "| Statistic             | Value     |",
-    "+-----------------------+-----------+",
-    "| Mode                  | random    |",
-    "| Deck file             | deck.json |",
-    "| Deck size             | 3         |",
-    "| Session               | stopped   |",
-    "| Total questions       | 0         |",
-    "| Correct answers       | 0         |",
-    "| Incorrect answers     | 0         |",
-    "| Accuracy              | 0.0%      |",
-    "| Distinct cards missed | 0         |",
-    "+-----------------------+-----------+",
-]
+DASH = "+----------------------------------------------------------+"
+END = "+==========================================================+"
 
-MISSED_B = ["Missed terms:", "  - B"]
-MISSED_NONE = ["Missed terms: none"]
+SUMMARY_3_2_B = (
+    HEAD
+    + [
+        "| Total questions    3                                     |",
+        "| Accuracy           [#############-------]  66.7%         |",
+        "| Rank               C                                     |",
+    ]
+    + [DASH]
+    + [
+        "| Missed terms                                             |",
+        "|   - B                                                    |",
+    ]
+    + [END]
+)
+SUMMARY_7_4_B = (
+    HEAD
+    + [
+        "| Total questions    7                                     |",
+        "| Accuracy           [###########---------]  57.1%         |",
+        "| Rank               D                                     |",
+    ]
+    + [DASH]
+    + [
+        "| Missed terms                                             |",
+        "|   - B                                                    |",
+    ]
+    + [END]
+)
+SUMMARY_1_0_A = (
+    HEAD
+    + [
+        "| Total questions    1                                     |",
+        "| Accuracy           [--------------------]   0.0%         |",
+        "| Rank               D                                     |",
+    ]
+    + [DASH]
+    + [
+        "| Missed terms                                             |",
+        "|   - A                                                    |",
+    ]
+    + [END]
+)
+SUMMARY_0_0 = (
+    HEAD
+    + [
+        "| Total questions    0                                     |",
+        "| Accuracy           [--------------------]   0.0%         |",
+        "| Rank               -                                     |",
+    ]
+    + [DASH]
+    + [
+        "| Missed terms: none                                       |",
+    ]
+    + [END]
+)
+SUMMARY_3_3 = (
+    HEAD
+    + [
+        "| Total questions    3                                     |",
+        "| Accuracy           [####################] 100.0%         |",
+        "| Rank               S                                     |",
+    ]
+    + [DASH]
+    + [
+        "| Missed terms: none                                       |",
+    ]
+    + [END]
+)
+SUMMARY_1_1 = (
+    HEAD
+    + [
+        "| Total questions    1                                     |",
+        "| Accuracy           [####################] 100.0%         |",
+        "| Rank               S                                     |",
+    ]
+    + [DASH]
+    + [
+        "| Missed terms: none                                       |",
+    ]
+    + [END]
+)
+SUMMARY_2_2 = (
+    HEAD
+    + [
+        "| Total questions    2                                     |",
+        "| Accuracy           [####################] 100.0%         |",
+        "| Rank               S                                     |",
+    ]
+    + [DASH]
+    + [
+        "| Missed terms: none                                       |",
+    ]
+    + [END]
+)
+SUMMARY_2_1_B = (
+    HEAD
+    + [
+        "| Total questions    2                                     |",
+        "| Accuracy           [##########----------]  50.0%         |",
+        "| Rank               D                                     |",
+    ]
+    + [DASH]
+    + [
+        "| Missed terms                                             |",
+        "|   - B                                                    |",
+    ]
+    + [END]
+)
+SUMMARY_9_8_EXCEPT = (
+    HEAD
+    + [
+        "| Total questions    9                                     |",
+        "| Accuracy           [##################--]  88.9%         |",
+        "| Rank               B                                     |",
+    ]
+    + [DASH]
+    + [
+        "| Missed terms                                             |",
+        "|   - Which keyword handles an exception raised in a try   |",
+        "|     block?                                               |",
+    ]
+    + [END]
+)
+SUMMARY_LONG_WORD = (
+    HEAD
+    + [
+        "| Total questions    1                                     |",
+        "| Accuracy           [--------------------]   0.0%         |",
+        "| Rank               D                                     |",
+    ]
+    + [DASH]
+    + [
+        "| Missed terms                                             |",
+        "|   - XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX |",
+        "|     XXXXXXXXXXXXXXXXXX                                   |",
+    ]
+    + [END]
+)
+
+REPORT_SEQ_3_2_B = (
+    HEAD
+    + [
+        "| Mode               sequential                            |",
+        "| Deck file          deck.json                             |",
+        "| Deck size          3                                     |",
+        "| Session            finished                              |",
+    ]
+    + [DASH]
+    + [
+        "| Total questions    3                                     |",
+        "| Correct answers    2                                     |",
+        "| Incorrect answers  1                                     |",
+        "| Accuracy           [#############-------]  66.7%         |",
+        "| Rank               C                                     |",
+    ]
+    + [DASH]
+    + [
+        "| Missed terms                                             |",
+        "|   - B                                                    |",
+    ]
+    + [END]
+)
+REPORT_SEQ_0_3_ABC = (
+    HEAD
+    + [
+        "| Mode               sequential                            |",
+        "| Deck file          deck.json                             |",
+        "| Deck size          3                                     |",
+        "| Session            finished                              |",
+    ]
+    + [DASH]
+    + [
+        "| Total questions    3                                     |",
+        "| Correct answers    0                                     |",
+        "| Incorrect answers  3                                     |",
+        "| Accuracy           [--------------------]   0.0%         |",
+        "| Rank               D                                     |",
+    ]
+    + [DASH]
+    + [
+        "| Missed terms                                             |",
+        "|   - A                                                    |",
+        "|   - B                                                    |",
+        "|   - C                                                    |",
+    ]
+    + [END]
+)
+REPORT_ADAPTIVE_7_4_B = (
+    HEAD
+    + [
+        "| Mode               adaptive                              |",
+        "| Deck file          deck.json                             |",
+        "| Deck size          5                                     |",
+        "| Session            finished                              |",
+    ]
+    + [DASH]
+    + [
+        "| Total questions    7                                     |",
+        "| Correct answers    4                                     |",
+        "| Incorrect answers  3                                     |",
+        "| Accuracy           [###########---------]  57.1%         |",
+        "| Rank               D                                     |",
+    ]
+    + [DASH]
+    + [
+        "| Missed terms                                             |",
+        "|   - B                                                    |",
+    ]
+    + [END]
+)
+REPORT_ADAPTIVE_STOPPED_1_1 = (
+    HEAD
+    + [
+        "| Mode               adaptive                              |",
+        "| Deck file          deck.json                             |",
+        "| Deck size          5                                     |",
+        "| Session            stopped                               |",
+    ]
+    + [DASH]
+    + [
+        "| Total questions    1                                     |",
+        "| Correct answers    1                                     |",
+        "| Incorrect answers  0                                     |",
+        "| Accuracy           [####################] 100.0%         |",
+        "| Rank               S                                     |",
+    ]
+    + [DASH]
+    + [
+        "| Missed terms: none                                       |",
+    ]
+    + [END]
+)
+REPORT_RANDOM_STOPPED_0 = (
+    HEAD
+    + [
+        "| Mode               random                                |",
+        "| Deck file          deck.json                             |",
+        "| Deck size          3                                     |",
+        "| Session            stopped                               |",
+    ]
+    + [DASH]
+    + [
+        "| Total questions    0                                     |",
+        "| Correct answers    0                                     |",
+        "| Incorrect answers  0                                     |",
+        "| Accuracy           [--------------------]   0.0%         |",
+        "| Rank               -                                     |",
+    ]
+    + [DASH]
+    + [
+        "| Missed terms: none                                       |",
+    ]
+    + [END]
+)
+REPORT_LONG_PATH = (
+    HEAD
+    + [
+        "| Mode               adaptive                              |",
+        "| Deck file          ...ython_basics_extended_edition.json |",
+        "| Deck size          8                                     |",
+        "| Session            finished                              |",
+    ]
+    + [DASH]
+    + [
+        "| Total questions    9                                     |",
+        "| Correct answers    8                                     |",
+        "| Incorrect answers  1                                     |",
+        "| Accuracy           [##################--]  88.9%         |",
+        "| Rank               B                                     |",
+    ]
+    + [DASH]
+    + [
+        "| Missed terms: none                                       |",
+    ]
+    + [END]
+)
+ALL_BLOCKS = [
+    HEAD,
+    SUMMARY_3_2_B,
+    SUMMARY_7_4_B,
+    SUMMARY_1_0_A,
+    SUMMARY_0_0,
+    SUMMARY_3_3,
+    SUMMARY_1_1,
+    SUMMARY_2_2,
+    SUMMARY_2_1_B,
+    SUMMARY_9_8_EXCEPT,
+    SUMMARY_LONG_WORD,
+    REPORT_SEQ_3_2_B,
+    REPORT_SEQ_0_3_ABC,
+    REPORT_ADAPTIVE_7_4_B,
+    REPORT_ADAPTIVE_STOPPED_1_1,
+    REPORT_RANDOM_STOPPED_0,
+    REPORT_LONG_PATH,
+]
+ALL_BLOCK_IDS = [
+    "head",
+    "summary-3-2-b",
+    "summary-7-4-b",
+    "summary-1-0-a",
+    "summary-0-0",
+    "summary-3-3",
+    "summary-1-1",
+    "summary-2-2",
+    "summary-2-1-b",
+    "summary-9-8-except",
+    "summary-long-word",
+    "report-seq-3-2-b",
+    "report-seq-0-3-abc",
+    "report-adaptive-7-4-b",
+    "report-adaptive-stopped-1-1",
+    "report-random-stopped-0",
+    "report-long-path",
+]
+LONG_DECK_PATH = (
+    "C:/Users/someone/Documents/My Decks/python_basics_extended_edition.json"
+)
+EXCEPT_TERM = "Which keyword handles an exception raised in a try block?"
+
 ABC_FEEDBACK_AB = ["Q1: A", green("Correct!"), "Q2: B"]
 ABC_AXC_LINES = [
     "Q1: A",
@@ -227,11 +418,6 @@ def use_deck(
     """Write ``deck.json`` in ``tmp_path`` and make it the current directory."""
     write_deck(tmp_path, pairs, as_object=as_object)
     monkeypatch.chdir(tmp_path)
-
-
-def assert_table_is_rectangular(lines: list[str]) -> None:
-    """Assert that every line of a table has the same length."""
-    assert len({len(line) for line in lines}) == 1
 
 
 # --- build_parser ------------------------------------------------------------
@@ -353,56 +539,19 @@ def test_accuracy_text(total: int, correct: int, expected: str) -> None:
     assert _accuracy_text(stats) == expected
 
 
-def test_missed_terms_lines_without_terms() -> None:
-    assert _missed_terms_lines([]) == ["Missed terms: none"]
-
-
-def test_missed_terms_lines_with_several_terms() -> None:
-    assert _missed_terms_lines(["C", "A"]) == ["Missed terms:", "  - C", "  - A"]
-
-
-# --- _format_table -----------------------------------------------------------
-
-
-def test_format_table_single_row() -> None:
-    lines = _format_table([("Mode", "random")])
-
-    assert lines == [
-        "+-----------+--------+",
-        "| Statistic | Value  |",
-        "+-----------+--------+",
-        "| Mode      | random |",
-        "+-----------+--------+",
-    ]
-
-
-def test_format_table_widens_columns_to_the_longest_text() -> None:
-    lines = _format_table([("A", "a very long value here"), ("Longer label here", "x")])
-
-    assert lines == [
-        "+-------------------+------------------------+",
-        "| Statistic         | Value                  |",
-        "+-------------------+------------------------+",
-        "| A                 | a very long value here |",
-        "| Longer label here | x                      |",
-        "+-------------------+------------------------+",
-    ]
-    assert_table_is_rectangular(lines)
-
-
 # --- _summary_lines and _report_lines ----------------------------------------
 
 
 def test_summary_lines_with_a_missed_term() -> None:
     lines = _summary_lines(SessionStats(3, 2, ("B",)))
 
-    assert lines == SHORT_3_66 + MISSED_B
+    assert lines == SUMMARY_3_2_B
 
 
 def test_summary_lines_without_questions() -> None:
     lines = _summary_lines(SessionStats(0, 0, ()))
 
-    assert lines == SHORT_0_0 + MISSED_NONE
+    assert lines == SUMMARY_0_0
 
 
 def test_report_lines_sequential_session() -> None:
@@ -410,31 +559,161 @@ def test_report_lines_sequential_session() -> None:
         SessionStats(3, 2, ("B",)), "sequential", "deck.json", 3, True
     )
 
-    assert lines == FULL_SEQ_3_2 + MISSED_B
+    assert lines == REPORT_SEQ_3_2_B
 
 
 def test_report_lines_incorrect_answers_differ_from_distinct_cards_missed() -> None:
-    # Here the incorrect answers (3) and the distinct cards missed (1) are
-    # different numbers, so the two rows cannot be confused.
+    # This case (7 questions, 4 correct answers) is important because the
+    # incorrect answers (3) and the number of missed cards (1) are
+    # different numbers.
     lines = _report_lines(SessionStats(7, 4, ("B",)), "adaptive", "deck.json", 5, True)
 
-    assert lines == FULL_ADAPTIVE_7_4 + MISSED_B
+    assert lines == REPORT_ADAPTIVE_7_4_B
 
 
 def test_report_lines_stopped_session() -> None:
     lines = _report_lines(SessionStats(0, 0, ()), "random", "deck.json", 3, False)
 
-    assert lines == FULL_RANDOM_STOPPED_0 + MISSED_NONE
+    assert lines == REPORT_RANDOM_STOPPED_0
 
 
-def test_report_lines_long_deck_path_widens_the_table() -> None:
-    path = "data/python_basics.json"
+# --- Report building blocks --------------------------------------------------
 
-    lines = _report_lines(SessionStats(0, 0, ()), "random", path, 8, True)
 
-    table = lines[:-1]
-    assert_table_is_rectangular(table)
-    assert any(line.startswith("| Deck file") and path in line for line in table)
+@pytest.mark.parametrize("block", ALL_BLOCKS, ids=ALL_BLOCK_IDS)
+def test_expected_blocks_are_60_characters_wide(block: list[str]) -> None:
+    assert {len(line) for line in block} == {60}
+
+
+def test_border_with_equals_and_with_dash() -> None:
+    assert _border("=") == END
+    assert _border("-") == DASH
+
+
+def test_row_pads_the_text_to_the_box_width() -> None:
+    row = _row("hi")
+
+    assert row == "| hi" + " " * 55 + "|"
+    assert row == "| hi                                                       |"
+
+
+def test_title_row_centers_the_title() -> None:
+    assert _title_row("SESSION REPORT") == HEAD[1]
+
+
+def test_pair_row_puts_the_value_after_the_label_column() -> None:
+    row = _pair_row("Mode", "adaptive")
+
+    assert row == "| Mode               adaptive                              |"
+
+
+def test_fit_short_text_is_unchanged() -> None:
+    assert _fit("short", 37) == "short"
+
+
+def test_fit_text_with_exactly_the_width_is_unchanged() -> None:
+    assert _fit("x" * 37, 37) == "x" * 37
+
+
+def test_fit_long_text_keeps_the_end() -> None:
+    fitted = _fit("0123456789" * 4, 37)
+
+    assert fitted == "...6789012345678901234567890123456789"
+    assert len(fitted) == 37
+
+
+def test_fit_small_width() -> None:
+    assert _fit("abcdef", 4) == "...f"
+
+
+@pytest.mark.parametrize(
+    ("correct", "total", "filled"),
+    [
+        (0, 0, 0),
+        (3, 3, 20),
+        (8, 9, 18),
+        (2, 3, 13),
+        (4, 7, 11),
+        (0, 1, 0),
+        (1, 2, 10),
+        (1, 40, 1),
+        (1, 80, 0),
+        (3, 80, 1),
+    ],
+)
+def test_accuracy_bar_filled_cells(correct: int, total: int, filled: int) -> None:
+    # (1, 40) is exactly half a cell and rounds up, (1, 80) is a quarter.
+    bar = _accuracy_bar(correct, total)
+
+    assert bar == "[" + "#" * filled + "-" * (20 - filled) + "]"
+
+
+@pytest.mark.parametrize(
+    ("correct", "total", "expected"),
+    [
+        (0, 0, "-"),
+        (10, 10, "S"),
+        (9, 10, "A"),
+        (89, 100, "B"),
+        (8, 10, "B"),
+        (3, 4, "B"),
+        (74, 100, "C"),
+        (7, 10, "C"),
+        (3, 5, "C"),
+        (59, 100, "D"),
+        (5, 10, "D"),
+        (0, 10, "D"),
+        (1, 3, "D"),
+    ],
+)
+def test_rank(correct: int, total: int, expected: str) -> None:
+    assert _rank(correct, total) == expected
+
+
+def test_missed_rows_without_terms() -> None:
+    assert _missed_rows([]) == [
+        "| Missed terms: none                                       |"
+    ]
+
+
+def test_missed_rows_with_several_terms() -> None:
+    assert _missed_rows(["C", "A"]) == [
+        "| Missed terms                                             |",
+        "|   - C                                                    |",
+        "|   - A                                                    |",
+    ]
+
+
+def test_summary_lines_with_one_missed_term() -> None:
+    assert _summary_lines(SessionStats(3, 2, ("B",))) == SUMMARY_3_2_B
+
+
+def test_summary_lines_with_no_questions() -> None:
+    assert _summary_lines(SessionStats(0, 0, ())) == SUMMARY_0_0
+
+
+def test_summary_lines_with_all_answers_correct() -> None:
+    assert _summary_lines(SessionStats(3, 3, ())) == SUMMARY_3_3
+
+
+def test_summary_lines_wraps_a_long_term() -> None:
+    lines = _summary_lines(SessionStats(9, 8, (EXCEPT_TERM,)))
+
+    assert lines == SUMMARY_9_8_EXCEPT
+
+
+def test_summary_lines_splits_a_long_word() -> None:
+    lines = _summary_lines(SessionStats(1, 0, ("X" * 70,)))
+
+    assert lines == SUMMARY_LONG_WORD
+
+
+def test_report_lines_truncates_a_long_deck_path() -> None:
+    stats = SessionStats(9, 8, ())
+
+    lines = _report_lines(stats, "adaptive", LONG_DECK_PATH, 8, True)
+
+    assert lines == REPORT_LONG_PATH
 
 
 # --- _read_answer ------------------------------------------------------------
@@ -528,18 +807,21 @@ def test_run_sequential_session_with_short_summary(
     assert result.exit_code == 0
     assert result.errors == []
     assert result.prompts == ["> ", "> ", "> "]
-    assert result.output == ABC_AXC_LINES + SHORT_3_66 + MISSED_B
+    assert result.output == ABC_AXC_LINES + SUMMARY_3_2_B
 
 
-def test_run_stats_flag_shows_the_full_report_instead_of_the_short_table(
+def test_run_stats_flag_shows_the_full_report_instead_of_the_summary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     use_deck(tmp_path, monkeypatch, make_pairs("A", "B", "C"))
 
     result = run_ui(["-f", "deck.json", "--stats"], "a", "x", "C")
 
-    assert result.output == ABC_AXC_LINES + FULL_SEQ_3_2 + MISSED_B
-    assert "| Accuracy        | 66.7% |" not in result.output
+    assert result.output == ABC_AXC_LINES + REPORT_SEQ_3_2_B
+    assert result.output.count(HEAD[1]) == 1
+    assert "| Mode               sequential                            |" in (
+        result.output
+    )
 
 
 def test_run_adaptive_session_labels_reviews(
@@ -550,7 +832,7 @@ def test_run_adaptive_session_labels_reviews(
     result = run_ui(["-f", "deck.json", "-m", "Adaptive"], *ADAPTIVE_REPLIES)
 
     assert result.exit_code == 0
-    assert result.output == ADAPTIVE_LINES + SHORT_7_57 + MISSED_B
+    assert result.output == ADAPTIVE_LINES + SUMMARY_7_4_B
 
 
 def test_run_adaptive_session_with_stats(
@@ -560,7 +842,7 @@ def test_run_adaptive_session_with_stats(
 
     result = run_ui(["-f", "deck.json", "-m", "Adaptive", "--stats"], *ADAPTIVE_REPLIES)
 
-    assert result.output == ADAPTIVE_LINES + FULL_ADAPTIVE_7_4 + MISSED_B
+    assert result.output == ADAPTIVE_LINES + REPORT_ADAPTIVE_7_4_B
 
 
 def test_run_exit_word_stops_the_quiz(
@@ -571,9 +853,7 @@ def test_run_exit_word_stops_the_quiz(
     result = run_ui(["-f", "deck.json"], "a", "exit")
 
     assert result.exit_code == 0
-    assert result.output == (
-        [*ABC_FEEDBACK_AB, "Quiz stopped.", ""] + SHORT_1_100 + MISSED_NONE
-    )
+    assert result.output == ([*ABC_FEEDBACK_AB, "Quiz stopped.", ""] + SUMMARY_1_1)
 
 
 def test_run_exit_word_with_stats_reports_a_stopped_session(
@@ -583,8 +863,8 @@ def test_run_exit_word_with_stats_reports_a_stopped_session(
 
     result = run_ui(["-f", "deck.json", "-m", "adaptive", "--stats"], "a", "exit")
 
-    assert result.output[-len(FULL_ADAPTIVE_STOPPED_1) - 1 :] == (
-        FULL_ADAPTIVE_STOPPED_1 + MISSED_NONE
+    assert result.output[-len(REPORT_ADAPTIVE_STOPPED_1_1) :] == (
+        REPORT_ADAPTIVE_STOPPED_1_1
     )
 
 
@@ -596,7 +876,7 @@ def test_run_exit_word_at_the_first_question(
     result = run_ui(["-f", "deck.json"], "exit")
 
     assert result.exit_code == 0
-    assert result.output == ["Q1: A", "Quiz stopped.", ""] + SHORT_0_0 + MISSED_NONE
+    assert result.output == ["Q1: A", "Quiz stopped.", ""] + SUMMARY_0_0
 
 
 @pytest.mark.parametrize(
@@ -610,9 +890,7 @@ def test_run_interruption_at_the_second_prompt(
     result = run_ui(["-f", "deck.json"], "a", exception)
 
     assert result.exit_code == 0
-    assert result.output == (
-        [*ABC_FEEDBACK_AB, "", "Quiz stopped.", ""] + SHORT_1_100 + MISSED_NONE
-    )
+    assert result.output == ([*ABC_FEEDBACK_AB, "", "Quiz stopped.", ""] + SUMMARY_1_1)
 
 
 @pytest.mark.parametrize(
@@ -626,9 +904,7 @@ def test_run_interruption_at_the_first_prompt(
     result = run_ui(["-f", "deck.json"], exception)
 
     assert result.exit_code == 0
-    assert result.output == (
-        ["Q1: A", "", "Quiz stopped.", ""] + SHORT_0_0 + MISSED_NONE
-    )
+    assert result.output == ["Q1: A", "", "Quiz stopped.", ""] + SUMMARY_0_0
 
 
 def test_run_all_wrong_with_stats(
@@ -644,9 +920,7 @@ def test_run_all_wrong_with_stats(
         red("Incorrect. Answer: b"),
         red("Incorrect. Answer: c"),
     ]
-    assert result.output[-len(FULL_SEQ_ALL_WRONG) - 4 :] == (
-        FULL_SEQ_ALL_WRONG + ["Missed terms:", "  - A", "  - B", "  - C"]
-    )
+    assert result.output[-len(REPORT_SEQ_0_3_ABC) :] == REPORT_SEQ_0_3_ABC
 
 
 def test_run_all_correct_has_no_missed_terms(
@@ -656,8 +930,11 @@ def test_run_all_correct_has_no_missed_terms(
 
     result = run_ui(["-f", "deck.json"], "a", "b", "c")
 
-    assert result.output[-len(SHORT_3_100) - 1 :] == SHORT_3_100 + MISSED_NONE
-    assert result.output[-1] == "Missed terms: none"
+    assert result.output[-len(SUMMARY_3_3) :] == SUMMARY_3_3
+    assert (
+        result.output[-2]
+        == "| Missed terms: none                                       |"
+    )
 
 
 def test_run_empty_reply_is_an_incorrect_answer(
@@ -668,9 +945,7 @@ def test_run_empty_reply_is_an_incorrect_answer(
     result = run_ui(["-f", "deck.json"], "")
 
     assert result.output == (
-        ["Q1: A", red("Incorrect. Answer: a"), "Quiz finished.", ""]
-        + SHORT_1_0
-        + ["Missed terms:", "  - A"]
+        ["Q1: A", red("Incorrect. Answer: a"), "Quiz finished.", ""] + SUMMARY_1_0_A
     )
 
 
@@ -703,8 +978,7 @@ def test_run_identical_cards_share_the_review_label(
             "Quiz finished.",
             "",
         ]
-        + SHORT_2_100
-        + MISSED_NONE
+        + SUMMARY_2_2
     )
 
 
@@ -726,7 +1000,7 @@ def test_run_object_format_deck_works_like_the_array(
 
     result = run_ui(["-f", "deck.json"], "a", "x", "C")
 
-    assert result.output == ABC_AXC_LINES + SHORT_3_66 + MISSED_B
+    assert result.output == ABC_AXC_LINES + SUMMARY_3_2_B
 
 
 def test_run_random_mode_with_a_single_card(
@@ -827,8 +1101,8 @@ def test_run_default_functions_complete_session(
         + "\nQ2: B\n> "
         + red("Incorrect. Answer: b")
         + "\nQuiz finished.\n\n"
-        + "\n".join(SHORT_2_50)
-        + "\nMissed terms:\n  - B\n"
+        + "\n".join(SUMMARY_2_1_B)
+        + "\n"
     )
     assert code == 0
     assert capsys.readouterr().out == expected
@@ -849,8 +1123,8 @@ def test_run_default_functions_end_of_input_stops_the_quiz(
         + green("Correct!")
         + "\nQ2: B\n> \n"
         + "Quiz stopped.\n\n"
-        + "\n".join(SHORT_1_100)
-        + "\nMissed terms: none\n"
+        + "\n".join(SUMMARY_1_1)
+        + "\n"
     )
     assert code == 0
     assert capsys.readouterr().out == expected
