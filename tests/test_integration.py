@@ -520,12 +520,14 @@ def test_main_script_in_a_separate_process() -> None:
     )
 
     lines = completed.stdout.splitlines()
-    box_start = next(i for i, line in enumerate(lines) if line.startswith("+="))
+    finished = lines.index("Quiz finished.")
     assert completed.returncode == 0
     assert completed.stderr == ""
     assert "Quiz finished." in completed.stdout
     assert completed.stdout.count(green("Correct!")) == 10
-    assert lines[box_start - 2 : box_start] == ["Quiz finished.", ""]
-    assert parse_report(lines[box_start:]) == ParsedReport(
+    assert lines[finished + 1] == ""
+    assert parse_report(lines[finished + 2 :]) == ParsedReport(
         summary_values("10", ACC_FULL, "S"), []
     )
+    assert lines[0] == green("+" + "=" * 58 + "+")
+    assert "READY PLAYER 1   MODE: SEQUENTIAL   CARDS: 10" in completed.stdout

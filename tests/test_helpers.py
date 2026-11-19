@@ -18,6 +18,7 @@ from tests.helpers import (
     red,
     run_ui,
     write_deck,
+    yellow,
 )
 
 # --- make_cards and make_pairs -----------------------------------------------
@@ -490,3 +491,14 @@ def test_run_ui_without_a_sound_player_rings_nothing(
     run_ui(["-f", str(path)], "a")
 
     assert capsys.readouterr().err == ""
+
+
+# --- yellow ------------------------------------------------------------------
+
+
+def test_yellow_wraps_text_in_yellow_code() -> None:
+    assert yellow("x") == "\x1b[33mx\x1b[0m"
+
+
+def test_yellow_of_an_empty_text_is_only_the_codes() -> None:
+    assert yellow("") == "\x1b[33m\x1b[0m"

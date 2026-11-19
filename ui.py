@@ -11,6 +11,7 @@ import textwrap
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
+from banner import ART_FIRST, ART_SECOND, MODES_LINE, STATUS_FORMAT, TAGLINE
 from data_loader import FlashcardLoadError, load_flashcards
 from models import Flashcard
 from quiz_engine import AnswerResult, QuizModeFactory, QuizSession, SessionStats
@@ -28,6 +29,7 @@ VALUE_WIDTH = TEXT_WIDTH - LABEL_WIDTH
 
 GREEN = "\033[32m"
 RED = "\033[31m"
+YELLOW = "\033[33m"
 RESET = "\033[0m"
 
 EXIT_WORD = "exit"
@@ -211,6 +213,46 @@ def _read_answer(input_fn: Callable[[str], str]) -> ReadResult:
     if text.strip().casefold() == EXIT_WORD:
         return ReadResult(answer=None, interrupted=False)
     return ReadResult(answer=text, interrupted=False)
+
+
+def _banner_art_row(text: str) -> str:
+    """Build a row of the banner with big letters.
+
+    Args:
+        text: The art text, ``TEXT_WIDTH`` characters wide.
+
+    Returns:
+        The row with a green frame and yellow letters.
+    """
+    return _colorize("| ", GREEN) + _colorize(text, YELLOW) + _colorize(" |", GREEN)
+
+
+def _banner_lines(mode: str, cards: int) -> list[str]:
+    """Build the lines of the intro banner.
+
+    Args:
+        mode: Name of the quiz mode.
+        cards: Number of cards of the loaded deck.
+
+    Returns:
+        The 19 lines of the banner. The frame and the small texts are green
+        and the big letters are yellow.
+    """
+    blank = _colorize(_row(""), GREEN)
+    status = STATUS_FORMAT.format(mode=mode.upper(), cards=cards)
+    return [
+        _colorize(_border("="), GREEN),
+        blank,
+        *(_banner_art_row(text) for text in ART_FIRST),
+        blank,
+        *(_banner_art_row(text) for text in ART_SECOND),
+        blank,
+        _colorize(_row(TAGLINE.center(TEXT_WIDTH)), GREEN),
+        _colorize(_row(MODES_LINE.center(TEXT_WIDTH)), GREEN),
+        _colorize(_border("-"), GREEN),
+        _colorize(_row(status.center(TEXT_WIDTH)), GREEN),
+        _colorize(_border("="), GREEN),
+    ]
 
 
 def _play_result(player: SoundPlayer, result: AnswerResult) -> None:
@@ -498,6 +540,7 @@ def run(
     output_fn: Callable[[str], None] = print,
     error_fn: Callable[[str], None] = _print_error,
     sound: SoundPlayer | None = None,
+    banner: bool = False,
 ) -> int:
     """Run the quiz from the command line.
 
@@ -512,6 +555,8 @@ def run(
         sound: Player of the sounds. If it is given it is used, whatever
             ``--sound`` says. If it is ``None``, the player is created from
             the ``--sound`` flag.
+        banner: If True, the intro banner is shown before the first
+            question, followed by an empty line.
 
     Returns:
         0 when the quiz ends or the user quits, 1 when the deck cannot be
@@ -526,6 +571,10 @@ def run(
         error_fn(f"Error: {error}")
         return EXIT_LOAD_ERROR
     player = sound if sound is not None else create_player(args.sound)
+    if banner is True:
+        for line in _banner_lines(args.mode, len(cards)):
+            output_fn(line)
+        output_fn("")
     finished = _ask_questions(session, input_fn, output_fn, player)
     output_fn("Quiz finished." if finished else "Quiz stopped.")
     output_fn("")

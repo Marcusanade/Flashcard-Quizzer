@@ -89,6 +89,18 @@ def red(text: str) -> str:
     return "\x1b[31m" + text + "\x1b[0m"
 
 
+def yellow(text: str) -> str:
+    """Wrap a text in the ANSI yellow code, as the interface does.
+
+    Args:
+        text: The text to color.
+
+    Returns:
+        The colored text.
+    """
+    return "\x1b[33m" + text + "\x1b[0m"
+
+
 class ScriptedInput:
     """Callable that replaces ``input()`` with scripted replies.
 
