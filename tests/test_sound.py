@@ -235,6 +235,7 @@ def test_bell_player_write_errors_are_ignored(error: type[Exception]) -> None:
     waits: list[float] = []
 
     def failing_write(text: str) -> None:
+        """Record the text, then raise the error of the test."""
         attempts.append(text)
         raise error("broken output")
 
@@ -256,6 +257,7 @@ def test_bell_player_keyboard_interrupt_in_sleep_cuts_the_sound() -> None:
     waits: list[float] = []
 
     def interrupted_sleep(seconds: float) -> None:
+        """Record the wait, then raise KeyboardInterrupt."""
         waits.append(seconds)
         raise KeyboardInterrupt
 

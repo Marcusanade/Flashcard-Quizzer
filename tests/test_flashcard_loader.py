@@ -46,6 +46,7 @@ def make_failing_reader(error: OSError) -> Callable[[str | Path], str]:
     """Build a replacement for ``read_text_file`` that always raises ``error``."""
 
     def fake_read(path: str | Path) -> str:
+        """Raise the error given to the builder instead of reading."""
         raise error
 
     return fake_read

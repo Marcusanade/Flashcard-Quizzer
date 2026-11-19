@@ -1058,6 +1058,7 @@ def test_run_value_error_from_the_factory_is_reported(
     # This path is defensive: with the current loader and the argparse
     # choices it cannot happen.
     def boom(name: str, cards: list[Flashcard]) -> QuizMode:
+        """Raise a ValueError instead of creating a mode."""
         raise ValueError("boom")
 
     use_deck(tmp_path, monkeypatch, make_pairs("A"))
