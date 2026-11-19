@@ -194,6 +194,44 @@ For each AI interaction, create a new entry with the following structure:
 - Asking for the testing of each module separately from the module that uses it gave tests that explain what each part must do
 
 
+### 2026-11-18 - Strategy and Factory patterns: quiz engine (Prompts 2A and 2B)
+
+**Context:** I needed the quiz engine without screen or keyboard code, so that it can be tested alone. I applied the Strategy pattern to the three quiz modes (sequential, random, adaptive) and the Factory pattern to choose the mode from the `--mode` name. I split the work into two small prompts: 2A for `QuizMode` and the three modes (18 November), and 2B for the factory and the session that uses a mode (19 November). I planned the design with a separate Claude chat session after reading `docs/design_patterns.md`.
+
+**AI Tool Used:** Claude Code in VS Code, plus a separate Claude chat session as a planning assistant to draft the prompts and review the results.
+
+**Prompt/Request:** Both prompts followed the Requirements Prompt pattern (Context, Requirements, Constraints, Examples) in English, with a Verification section.
+- Prompt 2A: create `quiz_engine.py` with an abstract `QuizMode` (`next_card()` abstract and `record_result()` as an empty hook), `SequentialMode`, `RandomMode` with an injected random generator, `rest_for_deck_size()` and `AdaptiveMode`. The adaptive rules were written exactly: a failed card comes back after a rest that grows with the deck size, a card is retired after 3 failures, the same card is never served twice in a row if there is another candidate, and cards are identified by position and never by value, so two cards with the same text do not share a failure counter. The prompt listed deliberate differences from the guide: every method has a return type (the guide omits `-> None`, which mypy rejects), modern `list` and `dict` instead of the `typing` aliases, and no `set_strategy` method, because the mode is chosen once.
+- Prompt 2B: add `QuizModeFactory` as a class with a registry (the shape used in the guide), `is_correct_answer`, the dataclasses `AnswerResult` and `SessionStats`, and `QuizSession` as the context of the Strategy pattern. It defined the statistics: total questions counts every time a card is asked, repetitions included; accuracy is correct answers over total; missed terms are distinct, in order of first miss.
+- I calculated the expected results by hand before seeing any code (for example the adaptive sequence A, B, C, D, B, E, B, and 4 correct of 7, which is 57.14%) and put them in the Verification section.
+
+**AI Response:** For 2A, Claude Code created `quiz_engine.py`, and all 11 verification checks matched my hand-calculated sequences. It reported three decisions of its own: the last served card is never repeated even if its rest has finished, `record_result` compares cards by value, and an empty deck is checked before the other parameters. For 2B it added the factory, the function, the two dataclasses and the session, and all 10 checks passed. It also reported, in its summary, that `is_correct_answer` returned False for `"a b"` against `"a b"`, which cannot be right for identical strings.
+
+**Changes Made:**
+- Chose the factory as a class and not as a function, because it follows the shape of the guide and is recognizable when someone inspects `quiz_engine.py`
+- Accepted the three decisions of the 2A report after tracing the adaptive sequences by hand
+- Found a mismatch while reviewing the 2B code: the docstring of `is_correct_answer` said that an empty answer is incorrect, but the code only compared the two strings, so `is_correct_answer("", "")` returned True. I sent a correction prompt instead of editing the code by hand: return False when the answer is empty after `strip()`, change nothing else, and print the results with `repr()` so spaces are visible
+- Checked the corrected function myself by reading its last lines and the seven test cases
+- Explained the strange `"a b"` result: the case actually had two spaces in the first argument, and the report text had collapsed them. The `repr()` output showed `'a  b'` returning False and `'a b'` returning True
+- Made one commit for the 2B work and the correction (`75cf67b`)
+
+**Reasoning:**
+- A docstring that promises a behavior the code does not have is a bug in the contract. The function is public, and the rest of the code may rely on its documentation, even if the loader makes this input impossible today
+- Printing with `repr()` is needed whenever the point of a check is whitespace
+- Identifying cards by position, and not by value, follows from a test written in the data layer, which shows that two cards with the same text are indistinguishable
+- The guide stays useful as a structure, but its code cannot be copied, because it conflicts with the type rules of this project
+
+**Outcome:** The Strategy and Factory patterns are in `quiz_engine.py` (commits `d2a7b1d` and `75cf67b`). The three modes are interchangeable through `QuizMode`, `QuizModeFactory.create_mode` returns a new instance on every call, and `QuizSession` computes total questions, accuracy and missed terms without any input or output. `black`, `isort`, `flake8` and `mypy` pass, and the 66 existing tests still pass. The engine has no tests of its own yet, which are the next prompt.
+
+**Lessons Learned:**
+- Calculating the expected results by hand before reading the code gives an independent check, so I am not just comparing the AI with itself
+- The review caught a gap between a docstring and the code that all the tools missed. Type checkers and linters do not read promises
+- When the AI shows a result that cannot be right, I should look for a display problem before suspecting the code, and `repr()` is the way to see it
+- The AI cannot isolate a diff for a correction if the previous work is not committed. I should commit before asking for a diff
+- A design guide gives a structure, but its examples may break the project rules, so the prompt must list the deliberate differences
+- The agent was honest about what it could not do, such as isolating that diff, and did not invent output
+
+
 
 
 
