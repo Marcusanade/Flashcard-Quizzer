@@ -9,6 +9,7 @@ from models import Flashcard
 from tests.helpers import (
     LineRecorder,
     ParsedReport,
+    RecordingPlayer,
     ScriptedInput,
     green,
     make_cards,
@@ -448,3 +449,44 @@ def test_parse_report_label_column_is_19_characters_wide() -> None:
     report = parse_report(lines)
 
     assert report == ParsedReport({"ABCDEFGHIJKLMNOPQRS": "value"}, [])
+
+
+# --- RecordingPlayer and the sound parameter of run_ui -----------------------
+
+
+def test_recording_player_records_sounds_in_order_in_its_own_list() -> None:
+    player = RecordingPlayer()
+
+    player.play_success()
+    player.play_failure()
+
+    assert player.events == ["sound:success", "sound:failure"]
+
+
+def test_recording_player_appends_to_the_list_it_was_given() -> None:
+    shared: list[str] = ["first"]
+    player = RecordingPlayer(shared)
+
+    player.play_failure()
+
+    assert player.events is shared
+    assert shared == ["first", "sound:failure"]
+
+
+def test_run_ui_passes_the_sound_player_to_the_interface(tmp_path: Path) -> None:
+    path = write_deck(tmp_path, make_pairs("A"))
+    player = RecordingPlayer()
+
+    run_ui(["-f", str(path)], "a", sound=player)
+
+    assert player.events == ["sound:success"]
+
+
+def test_run_ui_without_a_sound_player_rings_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = write_deck(tmp_path, make_pairs("A"))
+
+    run_ui(["-f", str(path)], "a")
+
+    assert capsys.readouterr().err == ""

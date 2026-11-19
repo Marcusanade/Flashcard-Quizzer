@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from data_loader import FlashcardLoadError, load_flashcards
 from models import Flashcard
 from quiz_engine import AnswerResult, QuizModeFactory, QuizSession, SessionStats
+from sound import SilentPlayer, SoundPlayer, create_player
 
 EXIT_OK = 0
 EXIT_LOAD_ERROR = 1
@@ -116,6 +117,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="stop after N answered questions (repeated questions count)",
     )
     parser.add_argument(
+        "--sound",
+        action="store_true",
+        help=(
+            "ring the terminal bell after each answer "
+            "(one ring if correct, three if incorrect)"
+        ),
+    )
+    parser.add_argument(
         "--stats",
         action="store_true",
         help="show the full statistics report at the end",
@@ -204,27 +213,45 @@ def _read_answer(input_fn: Callable[[str], str]) -> ReadResult:
     return ReadResult(answer=text, interrupted=False)
 
 
+def _play_result(player: SoundPlayer, result: AnswerResult) -> None:
+    """Play the sound that matches the result of an answer.
+
+    Args:
+        player: The sound player.
+        result: The outcome of the answer.
+    """
+    if result.correct:
+        player.play_success()
+    else:
+        player.play_failure()
+
+
 def _ask_questions(
     session: QuizSession,
     input_fn: Callable[[str], str],
     output_fn: Callable[[str], None],
+    sound: SoundPlayer | None = None,
 ) -> bool:
     """Ask questions until the session has no more cards or the user quits.
 
     A question that was shown but not answered is not counted. If the user
     quits with Ctrl+C or by closing the input, an empty line is shown first
-    so the next message starts on a new line.
+    so the next message starts on a new line. The sound of an answer is played
+    right after its feedback line. Nothing is played when the user quits.
 
     Args:
         session: The quiz session.
         input_fn: Function used to read an answer.
         output_fn: Function used to show a message.
+        sound: Player of the sounds. A silent player is used if it is
+            ``None``.
 
     Returns:
         True if the session ran out of cards, False if the user quit.
     """
     # Two identical cards in a deck are equal, so for the "(review)" label
     # they count as the same card.
+    player = sound if sound is not None else SilentPlayer()
     asked: set[Flashcard] = set()
     number = 0
     while (card := session.next_question()) is not None:
@@ -236,7 +263,9 @@ def _ask_questions(
             if reply.interrupted:
                 output_fn("")
             return False
-        output_fn(_feedback_line(session.submit_answer(reply.answer)))
+        result = session.submit_answer(reply.answer)
+        output_fn(_feedback_line(result))
+        _play_result(player, result)
     return True
 
 
@@ -468,6 +497,7 @@ def run(
     input_fn: Callable[[str], str] = input,
     output_fn: Callable[[str], None] = print,
     error_fn: Callable[[str], None] = _print_error,
+    sound: SoundPlayer | None = None,
 ) -> int:
     """Run the quiz from the command line.
 
@@ -479,6 +509,9 @@ def run(
         input_fn: Function used to read an answer.
         output_fn: Function used to show a message.
         error_fn: Function used to report an error.
+        sound: Player of the sounds. If it is given it is used, whatever
+            ``--sound`` says. If it is ``None``, the player is created from
+            the ``--sound`` flag.
 
     Returns:
         0 when the quiz ends or the user quits, 1 when the deck cannot be
@@ -492,7 +525,8 @@ def run(
     except (FlashcardLoadError, ValueError) as error:
         error_fn(f"Error: {error}")
         return EXIT_LOAD_ERROR
-    finished = _ask_questions(session, input_fn, output_fn)
+    player = sound if sound is not None else create_player(args.sound)
+    finished = _ask_questions(session, input_fn, output_fn, player)
     output_fn("Quiz finished." if finished else "Quiz stopped.")
     output_fn("")
     stats = session.stats()

@@ -12,6 +12,7 @@ from pathlib import Path
 
 import ui
 from models import Flashcard
+from sound import SoundPlayer
 
 
 def make_cards(*fronts: str) -> list[Flashcard]:
@@ -156,6 +157,32 @@ class LineRecorder:
         self.lines.append(line)
 
 
+class RecordingPlayer(SoundPlayer):
+    """Sound player that records the sounds instead of playing them.
+
+    Attributes:
+        events: ``"sound:success"`` or ``"sound:failure"`` for each sound.
+    """
+
+    def __init__(self, events: list[str] | None = None) -> None:
+        """Start recording.
+
+        Args:
+            events: List where the sounds are recorded, so a test can share
+                it with other recorders. A new list is used if it is
+                ``None``.
+        """
+        self.events: list[str] = events if events is not None else []
+
+    def play_success(self) -> None:
+        """Record a success sound."""
+        self.events.append("sound:success")
+
+    def play_failure(self) -> None:
+        """Record a failure sound."""
+        self.events.append("sound:failure")
+
+
 @dataclass(frozen=True)
 class RunResult:
     """What happened during a call to ``ui.run``.
@@ -177,6 +204,7 @@ def run_ui(
     argv: Sequence[str],
     *replies: str | type[BaseException],
     check_all_used: bool = True,
+    sound: SoundPlayer | None = None,
 ) -> RunResult:
     """Run ``ui.run`` with scripted input and collect what it shows.
 
@@ -186,6 +214,8 @@ def run_ui(
         argv: Command line arguments.
         *replies: Scripted replies, as for ``ScriptedInput``.
         check_all_used: If True, assert that every reply was used.
+        sound: Sound player passed to ``ui.run``. If it is ``None`` the
+            interface creates its own from the ``--sound`` flag.
 
     Returns:
         The exit code and everything the program showed.
@@ -197,7 +227,7 @@ def run_ui(
     scripted = ScriptedInput(*replies)
     output = LineRecorder()
     errors = LineRecorder()
-    exit_code = ui.run(argv, scripted, output, errors)
+    exit_code = ui.run(argv, scripted, output, errors, sound=sound)
     if check_all_used:
         assert scripted.remaining == 0, (
             f"{scripted.remaining} scripted replies were not used: "
