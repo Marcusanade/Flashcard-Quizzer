@@ -532,6 +532,84 @@ For each AI interaction, create a new entry with the following structure:
 - Nothing in these two prompts needed a correction of the AI code. The evidence of review is in the independent verification of the data, in the gap that a mutation found in my specification, and in the details that I read and accepted
 
 
+### 2026-11-19 - Final quality phase: coverage, CI, audits and cleanup (Phase 6)
+
+**Context:** After the extra features, this phase was about making the numbers that I deliver honest and the repository easy to check. I wanted the coverage to measure only the application code, a coverage report stored in the repository (the HTML folder is ignored by Git), proof that the code runs on Python 3.10 (the course requires 3.10 or higher and I had only used 3.14), and a check of the docstrings and of the repeated code. None of these tasks added behavior, and three of them were read-only audits.
+
+**AI Tool Used:** Claude Code in VS Code, plus a separate Claude chat session as a planning assistant to design each step, write the prompts and review the results.
+
+**Prompt/Request:** Seven small prompts in English with the Requirements Prompt structure and a Verification section.
+- Coverage configuration: a change only in `pyproject.toml` to measure the application code (not the tests or the `__init__.py` files), always with branches, and with a required minimum of 90 percent. The prompt contained my prediction (8 files, 446 statements, 118 branches). The threshold was tested by forcing it to 100 with a partial run, and restoring the file from a backup.
+- Coverage report: a throwaway script that runs the command of the course and `coverage report` and writes `docs/coverage_report.txt` from the real output. The script is not kept in the repository because, with the whole project as the source, a new file would count as application code.
+- Workflow for GitHub Actions: the exact content of the file in the prompt. One job runs the formatting and the linters once, with Python 3.14, because `requirements.txt` uses `>=` and an older Python could install an older formatter that formats differently. A second job runs the tests with coverage on Ubuntu with Python 3.10, 3.12 and 3.14. I chose three combinations and not six, because I develop on Windows. I took the versions of the actions from a recent article and could not check them before pushing.
+- Docstring audit: a read-only script with the standard `ast` module. The policy was every function, class and module in the application, and in the tests everything except the `test_*` functions. It also flagged docstrings that did not follow the Google style.
+- A prompt that added four one-line docstrings, with a diff that had to show exactly four inserted lines.
+- Duplication audit, also read-only, looking for equal function bodies, classes and constants across files.
+- A cleanup prompt based on that report. It moved the shared helpers to `tests/helpers.py`, required tests for each new helper, compared the list of test identifiers before and after, asked for eight mutations, and included two cosmetic changes in `ui.py`.
+
+**AI Response:** The coverage numbers matched my prediction, except that the course command with only the HTML report prints no table in the terminal. The workflow ran on GitHub with four green jobs on the first try, and the versions of the actions that I could not verify existed. The docstring audit found no missing docstring in 67 functions and 14 classes of the application and no style hint, which was better than the few hints that I had predicted. It found four missing docstrings in small functions defined inside tests, and the next prompt fixed them. The duplication audit found that the repeated code was only in the tests (`make_cards` in three files, a helper with two different names, the expected coverage strings, and some path constants), and that the repeated methods of the application were the polymorphism of the Strategy classes. After the cleanup there were 482 tests, 13 of them new, and no old identifier was lost. The agent corrected one instruction of mine: measuring `tests.helpers` with `--cov` gives 0 percent because I had told the configuration to omit the tests, so it measured the file with a temporary configuration and got 100 percent. One of the eight mutations was not detected by the tests that I had asked for (a helper that matches a border line with `+` instead of `+=`), and the agent added a test for it.
+
+**Changes Made:**
+- Accepted every step after reading the diffs and the real output
+- Decided which duplications to remove and which to keep, with a reason: the frame of the report box stays repeated in two test files, because one file tests the parser and the other the layout, and they must fail independently; the two `RecordingPlayer` classes record different texts on purpose; and the two `write_deck` functions do not have the same body
+- Decided not to reinforce the mutation that removes the shuffle of the random mode, because two tests already detect it
+- Noticed in a screenshot of GitHub that the repository is private, and added a task to change it before submitting
+
+**Reasoning:**
+- The 100 percent that I had before included the tests themselves, and was calculated over 2472 statements. The honest figure is 446 statements and 118 branches of application code, also at 100 percent. A minimum of 90 percent in the configuration makes the command fail if the coverage drops
+- A real run on Python 3.10 proves the requirement, and an assumption does not
+- Separating an audit from the correction keeps each prompt small and lets me decide what to fix after reading a report
+- A new shared helper needs its own tests, and comparing the test identifiers before and after is a cheap way to know that a refactor did not remove a test
+
+**Outcome:** The commits are `1287f01` (coverage configuration), `fb63ddf` (coverage report), `c7dbf40` (workflow), `31fcb53` (four docstrings) and `05c17fa` (cleanup). There are 482 tests, with 446 statements and 118 branches of application code at 100 percent, and `black`, `isort`, `flake8` and `mypy` are clean. All four jobs of the workflow pass, so the code is tested on Python 3.10, 3.12 and 3.14. The application code has no missing docstring.
+
+**Lessons Learned:**
+- Two of my predictions were wrong in this phase (the table of the HTML command, and the number of style hints), so I check a result against the real output and not against what I expect
+- For the third time in the project, a mutation showed a case that my own list of tests did not cover, so my lists need the mutation check as much as the AI code does
+- The agent also corrected an instruction of mine about the coverage, and I could only see it because it reported what really happened
+- Read-only audits with a throwaway script are a good way to check a rule that no tool enforces, and the result gives me a figure that I can quote in the report
+- Nothing in this phase needed a correction of the AI code. The evidence of review is in my decisions on what to unify and what to leave, and in the mutation and the instruction that were corrected
+
+
+### 2026-11-19 - Final quality phase: coverage, CI, audits and cleanup (Phase 6)
+
+**Context:** After the extra features, this phase was about making the numbers that I deliver honest and the repository easy to check. I wanted the coverage to measure only the application code, a coverage report stored in the repository (the HTML folder is ignored by Git), proof that the code runs on Python 3.10 (the course requires 3.10 or higher and I had only used 3.14), and a check of the docstrings and of the repeated code. None of these tasks added behavior, and three of them were read-only audits.
+
+**AI Tool Used:** Claude Code in VS Code, plus a separate Claude chat session as a planning assistant to design each step, write the prompts and review the results.
+
+**Prompt/Request:** Seven small prompts in English with the Requirements Prompt structure and a Verification section.
+- Coverage configuration: a change only in `pyproject.toml` to measure the application code (not the tests or the `__init__.py` files), always with branches, and with a required minimum of 90 percent. The prompt contained my prediction (8 files, 446 statements, 118 branches). The threshold was tested by forcing it to 100 with a partial run, and restoring the file from a backup.
+- Coverage report: a throwaway script that runs the command of the course and `coverage report` and writes `docs/coverage_report.txt` from the real output. The script is not kept in the repository because, with the whole project as the source, a new file would count as application code.
+- Workflow for GitHub Actions: the exact content of the file in the prompt. One job runs the formatting and the linters once, with Python 3.14, because `requirements.txt` uses `>=` and an older Python could install an older formatter that formats differently. A second job runs the tests with coverage on Ubuntu with Python 3.10, 3.12 and 3.14. I chose three combinations and not six, because I develop on Windows. I took the versions of the actions from a recent article and could not check them before pushing.
+- Docstring audit: a read-only script with the standard `ast` module. The policy was every function, class and module in the application, and in the tests everything except the `test_*` functions. It also flagged docstrings that did not follow the Google style.
+- A prompt that added four one-line docstrings, with a diff that had to show exactly four inserted lines.
+- Duplication audit, also read-only, looking for equal function bodies, classes and constants across files.
+- A cleanup prompt based on that report. It moved the shared helpers to `tests/helpers.py`, required tests for each new helper, compared the list of test identifiers before and after, asked for eight mutations, and included two cosmetic changes in `ui.py`.
+
+**AI Response:** The coverage numbers matched my prediction, except that the course command with only the HTML report prints no table in the terminal. The workflow ran on GitHub with four green jobs on the first try, and the versions of the actions that I could not verify existed. The docstring audit found no missing docstring in 67 functions and 14 classes of the application and no style hint, which was better than the few hints that I had predicted. It found four missing docstrings in small functions defined inside tests, and the next prompt fixed them. The duplication audit found that the repeated code was only in the tests (`make_cards` in three files, a helper with two different names, the expected coverage strings, and some path constants), and that the repeated methods of the application were the polymorphism of the Strategy classes. After the cleanup there were 482 tests, 13 of them new, and no old identifier was lost. The agent corrected one instruction of mine: measuring `tests.helpers` with `--cov` gives 0 percent because I had told the configuration to omit the tests, so it measured the file with a temporary configuration and got 100 percent. One of the eight mutations was not detected by the tests that I had asked for (a helper that matches a border line with `+` instead of `+=`), and the agent added a test for it.
+
+**Changes Made:**
+- Accepted every step after reading the diffs and the real output
+- Decided which duplications to remove and which to keep, with a reason: the frame of the report box stays repeated in two test files, because one file tests the parser and the other the layout, and they must fail independently; the two `RecordingPlayer` classes record different texts on purpose; and the two `write_deck` functions do not have the same body
+- Decided not to reinforce the mutation that removes the shuffle of the random mode, because two tests already detect it
+- Noticed in a screenshot of GitHub that the repository is private, and added a task to change it before submitting
+
+**Reasoning:**
+- The 100 percent that I had before included the tests themselves, and was calculated over 2472 statements. The honest figure is 446 statements and 118 branches of application code, also at 100 percent. A minimum of 90 percent in the configuration makes the command fail if the coverage drops
+- A real run on Python 3.10 proves the requirement, and an assumption does not
+- Separating an audit from the correction keeps each prompt small and lets me decide what to fix after reading a report
+- A new shared helper needs its own tests, and comparing the test identifiers before and after is a cheap way to know that a refactor did not remove a test
+
+**Outcome:** The commits are `1287f01` (coverage configuration), `fb63ddf` (coverage report), `c7dbf40` (workflow), `31fcb53` (four docstrings) and `05c17fa` (cleanup). There are 482 tests, with 446 statements and 118 branches of application code at 100 percent, and `black`, `isort`, `flake8` and `mypy` are clean. All four jobs of the workflow pass, so the code is tested on Python 3.10, 3.12 and 3.14. The application code has no missing docstring.
+
+**Lessons Learned:**
+- Two of my predictions were wrong in this phase (the table of the HTML command, and the number of style hints), so I check a result against the real output and not against what I expect
+- For the third time in the project, a mutation showed a case that my own list of tests did not cover, so my lists need the mutation check as much as the AI code does
+- The agent also corrected an instruction of mine about the coverage, and I could only see it because it reported what really happened
+- Read-only audits with a throwaway script are a good way to check a rule that no tool enforces, and the result gives me a figure that I can quote in the report
+- Nothing in this phase needed a correction of the AI code. The evidence of review is in my decisions on what to unify and what to leave, and in the mutation and the instruction that were corrected
+
+
 
 
 
