@@ -308,6 +308,43 @@ For each AI interaction, create a new entry with the following structure:
 - This phase produced no corrected code, so the evidence for reviewing the AI is in the design decisions I made first and in the manual tests
 
 
+### 2026-11-19 - Tests for the console interface: helpers and test_ui (Prompts 4A and 4B)
+
+**Context:** After the command line interface was finished, `ui.py` and `main.py` had no tests. The coverage report said 88%, but that total included the 617 lines of the test files themselves. Counting only the application code (323 lines), the real figure was about 69%, below the 80% required by the course. I split the work into two prompts: 4A for shared test helpers with their own tests, and 4B for `tests/test_ui.py`. I decided to build the helpers in their own prompt, so that this and the next prompt (integration tests) can reuse them.
+
+**AI Tool Used:** Claude Code in VS Code, plus a separate Claude chat session as a planning assistant to draft the prompts and review the results.
+
+**Prompt/Request:** Both prompts followed the Requirements Prompt pattern (Context, Requirements, Constraints, Examples) in English, with a Verification section.
+- Prompt 4A: create `tests/helpers.py` and `tests/test_helpers.py`. The helpers are `make_cards`, `make_pairs`, `write_deck`, `green` and `red`, a `ScriptedInput` that replaces `input()`, a `LineRecorder`, and `run_ui`. Two design rules were in the prompt: the color codes are written as literals and not imported from `ui.py`, so a change of color in `ui.py` is detected, and `ScriptedInput` raises `AssertionError` when it runs out of replies and never simulates an end of input, so a bug that asks for one answer too many cannot pass for a Ctrl+Z.
+- Prompt 4B: create `tests/test_ui.py`. I generated the expected tables and outputs with a script before writing the prompt, and put them in the prompt as literal lists. The tests had to compare whole output lists with these literals and never compute an expected value by calling the function under test. The prompt also asked for tests with the real `input` and `print` (using `sys.stdin` replaced by `io.StringIO` and `capsys`) and for `main.py` through `runpy`.
+- Both prompts asked for mutation checks: break the code on purpose, confirm that at least one test fails, and restore the file. For 4A, the new file was not committed yet, so the prompt told the agent to restore it from a backup copy and to compare file hashes at the end.
+
+**AI Response:** For 4A, Claude Code created the two files with 24 tests (182 in total) and 100% line and branch coverage for the helpers. All six mutations were detected, for example turning the green code into red, or removing the line that records the prompt. It also checked that the color codes in `helpers.py` were literal escape sequences, because an earlier tool of the same agent had once turned an escape into an invisible character. For 4B, it created 72 tests (254 in total), and `ui.py` and `main.py` reached 100% of lines and branches. All 15 mutations were detected: colors, the comparison of the exit word, the single `except` for Ctrl+C and end of input, the empty line after an interruption, the closing messages, the review label, the percentage format, the missed terms prefix, the incorrect answers row, the order of two report rows, `str.lower` in the parser, the load error exit code and the review rule. It found no bug in `ui.py`.
+
+**Changes Made:**
+- Accepted both results as generated after reading the files against the prompts, and committed them (`3d71d6e` and `4b515ef`)
+- Recalculated the real coverage of the application code before writing the prompts, and used it to decide that the interface tests were required and not optional
+- Kept three tests that compare only the end of the output (the exit word with `--stats`, all answers wrong and all answers correct). The prompt allowed it and the full-output tests cover the rest
+- Noted for the quality phase that `make_cards` now exists in three files, and that the two older test files should use the shared helper
+
+**Reasoning:**
+- A coverage total that includes the test files rewards writing tests and hides untested application code, so I read the figure for the application files
+- If a test builds its expected table by calling `ui.py`, it compares the code with itself and cannot detect a wrong layout. Literal tables written by hand are an independent reference
+- In the case of 3 questions with 2 correct answers, the number of incorrect answers and the number of distinct missed cards are both 1, so a swapped row would go unnoticed. I added a case with 7 questions and 4 correct answers, where they are 3 and 1, and the mutation that swapped them failed exactly that test
+- A scripted input that fails when it runs out is safer than one that simulates the end of the input, because the second can hide a missing answer in the program
+- The two tests that use `io.StringIO` depend on how `input()` writes the prompt when the input is not a terminal. I reasoned about it and warned that I could not run it. The real output matched my expectation
+
+**Outcome:** 254 tests pass. The application code has 100% line and branch coverage, and `black`, `isort`, `flake8` and `mypy` are clean. The shared helpers are ready for the integration tests. The work was done in commits `3d71d6e` (helpers) and `4b515ef` (interface tests).
+
+**Lessons Learned:**
+- A coverage percentage can look good because of the tests themselves, so I look at the figure for the application files
+- Expected values should come from a source independent from the code under test, such as a script or literal text
+- When two numbers are equal by chance, a test cannot tell them apart, so I choose a case where they differ
+- Mutation checks keep being the best way to know that tests protect a behavior: 21 deliberate breaks were all caught in these two prompts
+- Test helpers also need tests, because a faulty helper makes other tests pass for the wrong reason
+- This phase also produced no corrected code. The evidence for reviewing the AI is in the design decisions I took before the prompts and in the checks I made afterwards
+
+
 
 
 
