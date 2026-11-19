@@ -494,6 +494,44 @@ For each AI interaction, create a new entry with the following structure:
 - This feature again needed no correction of the AI code. The evidence of review is in the design decisions, in the mutation that aborted the session, in the two adjustments that I read and accepted, and in the honest result of the listening test
 
 
+### 2026-11-19 - Intro banner and the periodic table deck (Prompts 5F and 5G)
+
+**Context:** The last two additions of the extra features phase. The first was an intro banner in the style of the old arcade games, shown when the program starts. The second was a deck of my own for the project, as the submission asks for my own decks in `data/`: the periodic table, with two questions for each of the 118 elements, which is a good use of the `--limit` option because a full game would have 236 questions.
+
+**AI Tool Used:** Claude Code in VS Code, plus a separate Claude chat session as a planning assistant to research ideas, design the banner, verify the data of the elements and draft the prompts.
+
+**Prompt/Request:** Both prompts followed the Requirements Prompt pattern (Context, Requirements, Constraints, Examples) in English, with a Verification section.
+- Banner. I asked the planning assistant to search for ideas to make it look better. The search gave general guidelines (blocky capital letters, a green phosphor look, ASCII that works in every terminal, a width that does not wrap) and the assistant discarded Unicode block characters, which can fail with redirected output on Windows. I tried a drop shadow on the letters and rejected it, because with letters of only five rows it looked blurry. The design is a 60 column box in the same style as the final report, with the frame in green, the big letters in dark yellow, which was my choice, and a status line that changes with each game (mode and number of cards). The prompt put the art in a data module and generated it with a script, and it defined the exact color format of each kind of line. The banner is a parameter of `run()` that is off by default and only `main.py` turns on, so the existing tests of `run()` did not change. It must not appear with `--help` or when the deck cannot be loaded.
+- Deck. Before writing the prompt, the assistant verified the 118 elements against a table that uses the IUPAC spelling, and confirmed the names of the four newest elements in a separate source. It then typed its own lists of symbols and names from memory and compared them with the source: no differences. It also checked that the numbers go from 1 to 118, that the symbols and names are unique, and that the longest question has 45 characters, so it never wraps in the report. The first idea had been two decks, one for symbols and one for atomic numbers, because of a mode that was later discarded. I decided on a single file, and the assistant agreed that the reason had disappeared. The prompt asked Claude Code to generate the file with a throwaway script, and the tests had to hold the table as a literal typed again, a second small literal of 24 known elements typed independently, structural tests that do not use either table, and real games through the interface.
+- Both prompts asked for mutations (13 for the banner, on the code, and 9 for the deck, on the data) with backups and hash checks for the files that were not committed.
+
+**AI Response:** For the banner, Claude Code created the data module, the two functions that build the colored lines, the parameter of `run()` and the change of `main.py`. The suite reached 431 tests with 100% line and branch coverage, and all 13 mutations were detected, including showing the banner before the deck is loaded and leaving the yellow color without its closing code. For the deck, it generated the file with a script that it deleted, created 38 tests and reached 469 tests with 100% coverage. Eight of the nine mutations were detected at once. The ninth, a space added at the end of the answer for gold, was not, and the agent explained why: the loader strips the texts, so the space was gone before the test saw it. It changed that test to read the raw JSON file, with a comment, and the mutation was detected.
+
+**Changes Made:**
+- Accepted the banner after reading the code and the diff against the prompt, and after looking at it in my own terminal: the frame in green and the letters in dark yellow looked right
+- Accepted the deck after playing it with `python main.py -f data/periodic_table.json -m random --limit 10`: the questions were short, clear and had a single answer
+- Accepted the change that the agent made to the test of outer spaces. It fixes a gap in my specification, because I asked to check the loaded cards, which the loader already cleans
+- Put a cosmetic detail for the quality phase: the banner condition is written `if banner is True` and not `if banner:`
+- Committed the banner as `8560731`
+
+**Reasoning:**
+- Making the banner a parameter that is off by default kept 408 tests unchanged, and the one test that needed a change (the separate process) was made less fragile by locating the report from the closing line
+- Defining the exact escape codes of each kind of line in the prompt turned the colors into something that a test can compare with a literal, instead of something that only a person can judge
+- Verifying data with an independent source, and with two lists typed separately, is cheap and prevents a wrong fact from becoming a wrong test. Three copies of the table typed on their own are a cross-check: a transcription error would leave at least one of them different
+- Structural tests that do not use the table catch an error even if the prompt and the file shared the same mistake, for example a repeated symbol
+- A test that goes through a filter cannot detect what the filter removes. Reading the raw file is the way to test the file and not the loader
+- The default rest of the adaptive mode grows with the deck: for 236 cards it is 10 questions, so a game of 5 questions shows no reviews. A test of the new deck documents this, which was a decision of an earlier phase
+
+**Outcome:** The program starts with a banner in green and yellow with the mode and the number of cards of the loaded deck, and there is a new deck with 236 cards. 469 tests pass, with 100% line and branch coverage in every file, and `black`, `isort`, `flake8` and `mypy` are clean. The banner is in commit `8560731`.
+
+**Lessons Learned:**
+- Mutation checks keep revealing gaps in my own prompts. In this phase two behaviors were missing from my lists of tests, and the mutations that survived showed exactly where
+- Data deserves the same care as code: a source, an independent cross-check and tests of the structure
+- A feature that is off by default and turned on at the entry point can be added without changing the existing tests
+- Some qualities can only be judged by a person, such as how a banner looks. I define what can be compared (the codes, the layout) and then look at the result myself
+- Nothing in these two prompts needed a correction of the AI code. The evidence of review is in the independent verification of the data, in the gap that a mutation found in my specification, and in the details that I read and accepted
+
+
 
 
 
