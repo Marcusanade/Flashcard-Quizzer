@@ -456,6 +456,44 @@ For each AI interaction, create a new entry with the following structure:
 - This feature again needed no correction of the AI code. The evidence of review is in the design decision, in the test that observes the side effect and in the investigation of a result that did not match my expectation
 
 
+### 2026-11-19 - Sound feedback with the terminal bell (Prompts 5D and 5E)
+
+**Context:** I wanted an optional sound after each answer, in the style of old arcade games: a short sound for a correct answer and a different one for an incorrect answer. The first ideas (a sound of uncertainty while typing, and different tones for each platform) were too complex, so I chose the simplest portable option: the terminal bell, with one ring for a correct answer and three for an incorrect one. I split the work into two prompts: 5D for a new sound module and 5E to connect it to the console interface with a `--sound` option.
+
+**AI Tool Used:** Claude Code in VS Code, plus a separate Claude chat session as a planning assistant to research the options, design the module and draft the prompts.
+
+**Prompt/Request:** Both prompts followed the Requirements Prompt pattern (Context, Requirements, Constraints, Examples) in English, with a Verification section.
+- Design agreed before the prompts. I checked the documentation of `winsound`, and tested on my own machine that the bell is audible in the VS Code terminal, which needed the setting `accessibility.signals.terminalBell` with `"sound": "on"`. The design used the Strategy pattern: an abstract `SoundPlayer`, a `SilentPlayer` that does nothing and acts as a null object (so the interface needs no `if` to know whether sound is enabled), and a `BellPlayer`. I chose a plain function `create_player` and not a factory class, because with two options a registry would have forced the pattern. The bell goes to the standard error stream, so a redirected output file does not fill with control characters.
+- Prompt 5D: create only `sound.py` and `tests/test_sound.py`, with the writing and the waiting injectable so the tests make no noise and do not wait. Sound must never break a quiz, so write errors are ignored. I added one decision of my own: a Ctrl+C that arrives during the 0.42 seconds of the failure sound only cuts the sound, because a second place that catches `KeyboardInterrupt` would break the rule that it is handled in only one function. The prompt asked for 12 mutations, with a backup of the new file because it was not committed.
+- Prompt 5E: add `--sound` and connect the player. The player is an optional last parameter of `run()` and `_ask_questions`, so the 388 existing tests did not change, and an injected player wins over the flag. The sound plays right after the feedback line, and never when the user quits. A shared timeline between the output and a recording player checks the order. One test runs the program in a separate process and checks that the bell goes to the standard error. The prompt forbade running the program with `--sound` in the terminal, so nothing would ring while the agent worked.
+
+**AI Response:** In 5D, Claude Code created both files and the suite reached 388 tests with 100% line and branch coverage. All 12 mutations were detected, though one in a different way: removing the handling of `KeyboardInterrupt` made the exception rise out of the test and abort the whole pytest session, and the agent noticed that its script showed "0 failures" and repeated the mutation by hand to confirm it. It made two small adjustments to my prompt: a helper `returned(...)`, because mypy rejects using the value returned by a method that returns `None`, and a list that must stay empty instead of a helper that fails the test when `time.sleep` is called, because the failing line would never run and would break the 100% coverage. In 5E it connected the player, and the suite reached 408 tests with 100% coverage. All 9 mutations were detected. It reported one deviation: in the tests of the real bell, the deck of three cards with two scripted answers made the program ask a third question, so it added `--limit 2`, and the expected values stayed the same.
+
+**Changes Made:**
+- Accepted both results after reading the code of `sound.py` and the diff of `ui.py` and `tests/helpers.py` against the prompts, and after checking that the tests contain no `# type: ignore`, no `unittest`, no `mock` and no `print`
+- Accepted the two adjustments of 5D and the `--limit 2` deviation of 5E
+- Noticed in the diff that the new line `player = ...` in `_ask_questions` sits between the comment about identical cards and the line `asked`, which the comment explains. It is cosmetic, so I put it in the list for the quality phase
+- Noticed that the summary of 5D said "33 cases" for the sound tests, while pytest collected 20 items and the suite grew from 368 to 388. The count in the summary was wrong, as in two previous summaries
+- Played the real program with `--sound` in the VS Code terminal. The two sounds were the same and a little late. I did not change the code and kept the bell
+
+**Reasoning:**
+- A null object removes a check from every call, and it is the reason that the rest of the program is unchanged without `--sound`
+- The bell cannot change its pitch or its length, so the failure sound is made of three rings with silences between them
+- Reading `sys.stderr` and `time.sleep` when they are used and not when the module is imported lets the tests replace them. Without that, the tests would wait for real
+- Banning the real program with `--sound` in the agent run, and replacing `time.sleep` in the tests that use the real bell, keeps the test runs silent
+- The listening test showed what the tests could not. The program does send one ring for a correct answer and three for an incorrect one, and a test checks it on the standard error stream, but the terminal decides what to do with those rings. Some terminals limit the number of bells per second, for example Windows Terminal, and the VS Code accessibility sound is a fixed sound that can be late. In my environment the two answers sounded the same. The alternative of real tones with `winsound.Beep` would be immediate and different for each answer, but it only works on Windows. I had chosen the portable option for simplicity, and after listening I decided to keep it, and to document that the sound depends on the terminal
+
+**Outcome:** `--sound` is available and off by default. 408 tests pass, with 100% line and branch coverage in every file, and `black`, `isort`, `flake8` and `mypy` are clean. The commits are `5d88f2f` (the sound module) and `c9caa34` (the connection with the interface). The sound is a small extra and works as designed, but in my terminal it cannot tell a correct answer from an incorrect one by ear, and I will say so in the README and in the report.
+
+**Lessons Learned:**
+- Some behavior cannot be tested by a program. The tests prove what the program sends, and only a person listening can prove what the terminal does with it
+- A choice made for simplicity can show its limits with real use. Keeping a simple solution with its limits documented is a valid decision
+- Splitting a feature into a module and a connection made each step small and easy to review, and let me commit the module before the interface used it
+- The agent checked a result that looked wrong in its own script (a mutation that aborted the session instead of failing a test), instead of accepting "0 failures"
+- Summaries of the AI can contain a wrong count even when the code is right, so I check them against the real output
+- This feature again needed no correction of the AI code. The evidence of review is in the design decisions, in the mutation that aborted the session, in the two adjustments that I read and accepted, and in the honest result of the listening test
+
+
 
 
 
