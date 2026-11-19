@@ -345,6 +345,44 @@ For each AI interaction, create a new entry with the following structure:
 - This phase also produced no corrected code. The evidence for reviewing the AI is in the design decisions I took before the prompts and in the checks I made afterwards
 
 
+### 2026-11-19 - Integration tests with the real decks (Prompt 4C)
+
+**Context:** The modules and the console interface had their own tests, but nothing checked the whole application working together with the two real decks in the `data` folder. The course also requires a test named `test_full_session` that simulates a user answering 3 questions and checks the final statistics. I wrote one prompt for the file `tests/test_integration.py`.
+
+**AI Tool Used:** Claude Code in VS Code, plus a separate Claude chat session as a planning assistant to draft the prompt and review the result.
+
+**Prompt/Request:** One prompt in English, with the Requirements Prompt structure (Context, Requirements, Constraints, Examples) and a Verification section.
+- To fix the expected results, I asked for the content of both decks and wrote a script that simulates the rules of the adaptive mode independently from the code. I checked the script against two references before trusting it: the sequence A, B, C, D, B, E, B from the first engine tests, and the game that I had played by hand in the terminal (9 questions, one review at question 8). It reproduced both.
+- The prompt gave the decks, the tables and the exact sequences of questions as literal text: 24 questions for the 8-card deck always answered wrong, 20 for the glossary when each card is failed once and then answered correctly, and 30 when it is always wrong. It also asked for a helper that answers by reading the last question shown, so that the random and adaptive modes can be played without knowing the order in advance, and for a test of the real decks that pins their content.
+- One test had to run `main.py` in a separate process, with a timeout. The prompt also asked for eight mutations of the engine, the loader and the interface, each restored with `git checkout`.
+- The prompt said that if a test failed, the agent had to stop and report, because the cause could be a bug in the code or a mistake in my calculation.
+
+**AI Response:** Claude Code created 19 tests (273 in total), and all passed on the first run, so my sequences matched the real behavior. Coverage of the project was 100% for lines and branches. The eight mutations were all detected: the minimum rest, the failure limit, the mode registry, the rule that a review card must wait for its rest, the key `cards` of the object format, the duplicates in the missed terms, the deck size in the report and the `strip` of the answer. The separate-process test took 0.93 seconds. It said that my message seemed to end in the middle of a sentence, and it interpreted the rest correctly. It also kept the rule of not touching any existing file.
+
+**Changes Made:**
+- Accepted the file as generated after reading it against the prompt, and committed it (`73af809`)
+- Changed my plan before writing the prompt: I had meant to ask for the property "no card is asked twice in a row" in the adaptive mode. The simulation showed that it is false. When only one card is left, it is repeated in a row, as the rule says "if there is another candidate". The glossary sequences end with card 10 asked twice, and then three times. I replaced the property with exact sequences and a comment that explains the repetition
+- Kept the tests of the random mode as properties, plus one test that runs the mode up to 5 times and checks that at least one order differs from the file order. The chance of 5 identical orders is below 1 in 10^30, so it cannot fail by luck, and without it a registry that returned the sequential mode for `random` would pass most other random tests
+- Noted that some tables are repeated in `test_ui.py` and `test_integration.py`, and that `make_cards` has three copies, for the quality phase
+
+**Reasoning:**
+- A test that fixes a sequence must come from a source independent from the code. A simulation written from the rules, and checked against two known references, gives that source. Copying what the code produces would only compare the code with itself
+- If I had asked for the false property, the test would have failed because of my mistake, and I could have taken it for a bug in the engine. Simulating first avoided that
+- A real game played by hand makes a good regression test, because it was checked with my own eyes
+- Running the program in a separate process checks what the unit tests cannot: that the entry point, the exit code and the standard streams work for real. One test is enough, because it is slower and does not count for coverage
+- My prompt contained an unfinished sentence in the requirement about the table of the separate-process test. The agent used the exact lines, so there was no damage, but I should reread my prompts before sending them
+
+**Outcome:** 273 tests pass. The project has 100% line and branch coverage, and `black`, `isort`, `flake8` and `mypy` are clean. The application is tested at three levels: each module alone, the console interface with scripted input, and the whole program with the real decks, including a separate process. The commit is `73af809`.
+
+**Lessons Learned:**
+- Simulating the expected behavior independently, and checking the simulation against known cases, catches mistakes in my own reasoning before they reach the tests
+- A property that sounds natural, such as "never twice in a row", can be false at the edge. Exact sequences make the edge visible
+- A test of randomness can still be deterministic in practice if the probability of a false failure is negligible
+- The agent said that my message looked cut off and still did the right thing, which shows the value of clear and complete prompts
+- Three levels of tests find different problems. Unit tests find a wrong value, integration tests find a wrong connection, and the separate process finds a wrong entry point
+- This phase again produced no corrected code. The evidence of review is in the independent calculation and in the mistake that it prevented
+
+
 
 
 
