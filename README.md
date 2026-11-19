@@ -225,7 +225,54 @@ Flashcard-Quizzer/
 ├── .flake8, mypy.ini        # Linter and type checker configuration
 └── requirements.txt         # Development tools
 ```
+## Architecture
 
+How the modules depend on each other. The arrows point from the module that uses to the module that is used.
+
+```mermaid
+flowchart LR
+    main["main.py<br/>entry point"] --> ui["ui.py<br/>command line, quiz loop, report"]
+    ui --> loader["data_loader.py<br/>load and validate"]
+    loader --> files["utils/file_handler.py<br/>read UTF-8 text"]
+    loader --> models["models.py<br/>Flashcard"]
+    decks[("data/*.json")] -.-> files
+    ui --> engine["quiz_engine.py<br/>modes, factory, session, statistics"]
+    engine --> models
+    ui --> sound["sound.py<br/>sound players"]
+    ui --> banner["banner.py<br/>intro data"]
+```
+
+The Strategy and Factory patterns. A quiz mode and a sound player are interchangeable strategies, and the session and the interface never ask which one they have.
+
+```mermaid
+classDiagram
+    class QuizMode {
+        <<abstract>>
+        +next_card() Flashcard or None
+        +record_result(card, correct)
+    }
+    QuizMode <|-- SequentialMode
+    QuizMode <|-- RandomMode
+    QuizMode <|-- AdaptiveMode
+    class QuizModeFactory {
+        +create_mode(name, cards) QuizMode
+        +available_modes() tuple
+    }
+    QuizModeFactory ..> QuizMode : creates
+    class QuizSession {
+        +next_question()
+        +submit_answer(answer)
+        +stats()
+    }
+    QuizSession o-- QuizMode : uses one mode
+    class SoundPlayer {
+        <<abstract>>
+        +play_success()
+        +play_failure()
+    }
+    SoundPlayer <|-- SilentPlayer
+    SoundPlayer <|-- BellPlayer
+```
 ## Development
 
 Run everything from the project folder, with the virtual environment active:
