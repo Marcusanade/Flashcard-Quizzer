@@ -232,6 +232,43 @@ For each AI interaction, create a new entry with the following structure:
 - The agent was honest about what it could not do, such as isolating that diff, and did not invent output
 
 
+### 2026-11-19 - Quiz engine tests and mutation checks (Prompt 2C)
+
+**Context:** The quiz engine (`QuizMode` and its three subclasses, `QuizModeFactory` and `QuizSession`) was committed without tests. The course requires `test_quiz_mode_factory` and `test_adaptive_mode_behavior`, and I wanted tests that protect the design decisions of the adaptive mode, not just tests that execute the lines.
+
+**AI Tool Used:** Claude Code in VS Code, plus a separate Claude chat session as a planning assistant to draft the prompt and review the result.
+
+**Prompt/Request:** One prompt in English, with the Requirements Prompt structure (Context, Requirements, Constraints, Examples) and a Verification section. It created two files, `tests/test_quiz_modes.py` for the modes and the factory and `tests/test_quiz_session.py` for the answer check, the statistics and the session.
+- The Context listed the exact behavior and error messages of the engine, so the tests would check real text.
+- The expected card sequences for the adaptive mode were calculated by hand before the tests existed, for example A, B, C, D, B, E, B for the course example, and Q0, Q1, Q2, Q0, Q3 for the default rest of a 10-card deck.
+- `RandomMode` had to be tested by properties only (every card once, same seed gives same order, the global random state is not used), and the prompt forbade writing the concrete order of `Random(0)`, because it depends on the implementation of `shuffle`.
+- The constraints said: no `# type: ignore`, no `unittest.mock`, no reading of private attributes except in one extensibility test, and if a test fails because of a real bug, do not change the source code and report it.
+- The Verification section asked for nine mutations of `quiz_engine.py` (for example `rest + 1`, `<=` instead of `<`, removing the "not twice in a row" condition, `lower()` instead of `casefold()`, removing the `shuffle` call), each restored with `git checkout`, and branch coverage only from the command line.
+
+**AI Response:** Claude Code created 92 new tests, 66 in the modes file and 26 in the session file, and the whole suite had 158 tests, all passing. Coverage of `quiz_engine.py` was 100% for lines (151) and branches (42). The nine mutations all made at least one test fail: 6, 8, 1, 1, 3, 1, 5, 3 and 2 tests respectively. It reported that the weakest check was removing `shuffle`, caught by one test, and that replacing the tuple copy with the original list did not break the random case, because `RandomMode` makes its own copy. The prompt contained two instructions that contradicted each other, a session test "through the factory" and also "with a directly built mode with `rest=2`", and Claude Code resolved it by parametrizing both variants and explained why. It found no bug in `quiz_engine.py`.
+
+**Changes Made:**
+- Accepted the tests as generated after reviewing both files against the prompt: the two required names, the sequences, the comments about duplicates and immediate repetition, the single use of the private registry, and the absence of `# type: ignore` and `unittest.mock`
+- Recalculated three adaptive sequences by hand and compared them with the tests
+- Verified the counts in the pytest output. The summary said the modes file had 92 tests, but the real numbers are 66 and 26, and 92 is the total of both. The suite total of 158 was correct
+- Noted that `make_cards` is duplicated in both test files. It was requested by the prompt (no shared module), so I accepted it for now and put it in the list for the final quality phase
+- Committed the tests (`b271794`)
+
+**Reasoning:**
+- A deliberate change to the code that makes tests fail shows that the tests protect a behavior. The most useful ones here were the off-by-one in the rest, the failure limit and the "no immediate repetition" rule, because those are the decisions of the adaptive mode that are easiest to get wrong
+- Testing `RandomMode` by properties avoids a test that would break with no real bug if `shuffle` changed
+- The contradiction in my prompt was my mistake, and the AI handled it openly instead of picking silently
+- A 100% coverage total includes the test files themselves, so I read the figure for `quiz_engine.py` and not the total
+
+**Outcome:** 158 tests pass. `quiz_engine.py` has 100% line and branch coverage, and `black`, `isort`, `flake8` and `mypy` are clean. All nine mutations were detected and the source file was restored and unchanged. The engine is complete and tested, and the command line interface is the next phase.
+
+**Lessons Learned:**
+- Mutation checks tell me more than the coverage percentage. A line can be executed without any test noticing a wrong value
+- A summary written by the AI can contain a wrong figure even when the code and the tools are right, so I check it against the real output
+- The weakest mutation shows where a test suite is thin, and I can decide whether to reinforce it or accept the limit
+- If my prompt contradicts itself, a good agent points it out. I should reread my prompts for contradictions before sending them
+- Calculating expected results before the tests exist keeps the review independent from the AI
+
 
 
 
