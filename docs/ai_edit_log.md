@@ -269,6 +269,45 @@ For each AI interaction, create a new entry with the following structure:
 - If my prompt contradicts itself, a good agent points it out. I should reread my prompts for contradictions before sending them
 - Calculating expected results before the tests exist keeps the review independent from the AI
 
+### 2026-11-19 - Console interface in three prompts (Prompts 3A, 3B and 3C)
+
+**Context:** The data layer and the quiz engine were tested and committed, and the course requires a command line interface with `argparse`, green and red feedback, a clean exit with "exit" or Ctrl+C, and a final summary with total questions, accuracy and missed terms. I split the work into three small prompts that all modify `ui.py`: 3A for the arguments, the question loop and the load errors; 3B for the colors and the ways to quit; 3C for the final summary and the `--stats` flag. Before writing any prompt I agreed the design with a separate Claude chat session.
+
+**AI Tool Used:** Claude Code in VS Code, plus a separate Claude chat session as a planning assistant to draft the prompts and review the results.
+
+**Prompt/Request:** All three prompts followed the Requirements Prompt pattern (Context, Requirements, Constraints, Examples) in English, with a Verification section. Each one said which files must not change and which later parts must not be implemented yet.
+- Design decisions fixed in the prompts: questions are labeled `Q1`, `Q2` and so on, and a repeated card shows `Q5 (review)`; after a wrong answer the expected answer is shown; only green and red are used, with raw ANSI codes and no extra options; the exit code is 0 for a normal end or a quit and 1 when the deck cannot be loaded; the short summary is always shown and `--stats` shows the full report instead of repeating the short table.
+- Prompt 3A: `build_parser()` with `-f`, `-m` (choices taken from `QuizModeFactory.available_modes()`) and `--stats`, `run()` with injectable `input_fn`, `output_fn` and `error_fn` so that the loop can be tested without a keyboard, a minimal `main.py`, and friendly load errors.
+- Prompt 3B: green and red feedback, and one function that handles "exit", Ctrl+C and the end of the input, the only place where `KeyboardInterrupt` and `EOFError` may be caught.
+- Prompt 3C: functions that return lists of lines (an ASCII table, the missed terms, the short summary and the full report) so they can be checked without capturing the screen. The expected tables were generated with a script before I wrote the prompt, so the verification compares with exact text.
+
+**AI Response:** In 3A, Claude Code created `ui.py` and replaced `main.py`, and its eight scripted checks matched the expected output, including the adaptive labels `Q5 (review)` and `Q7 (review)` and 24 questions for a deck of 8 cards always answered wrong. In 3B, it kept the single `except (KeyboardInterrupt, EOFError):` and chose a small frozen dataclass `ReadResult` instead of a tuple, explaining why in the docstring. In 3C, it added the four functions I asked for and one more, `_accuracy_text`, to avoid writing the same format twice. Its own check that every table line has the same length failed once because of a bug in its script, which counted the empty lines, and it fixed the script and said so in the report.
+
+**Changes Made:**
+- No code changes were needed in any of the three prompts. I accepted each result after reading `ui.py` against the prompt and running the tools, and I committed after each one (`03e8d2d`, `c146b49` and `47fe8ab`)
+- Moved the friendly handling of load errors from prompt 3B to 3A, because it was small and the first manual test with a missing file would otherwise show a traceback
+- Dropped the extras I had proposed (a `--no-color` flag, a `NO_COLOR` variable and a terminal check), following the rule of not adding what is not requested
+- Ran the manual checks that a script cannot do: the colors in PowerShell, `exit`, Ctrl+C, Ctrl+Z followed by Enter, a complete adaptive game, a missing file, a directory, an invalid mode and a broken JSON file
+- Traced the adaptive game by hand: 8 cards and 9 questions, one failure and a review at question 8, which gives 88.9%, and it matched the screen
+
+**Reasoning:**
+- Passing the input and output functions as parameters keeps `ui.py` testable without patching the keyboard
+- Catching Ctrl+C and the end of the input in a single place avoids scattered handlers that are hard to maintain
+- Functions that return lines and do not print let the next phase check the text exactly, and keep the printing in one function
+- ASCII table borders avoid an encoding error if the output is redirected on Windows
+- The word "exit" is reserved, so a card whose correct answer is literally "exit" cannot be answered correctly. I documented this limitation in the code instead of adding a more complex quit command
+
+**Outcome:** The application works end to end: `python main.py --help`, a sequential game, a random game and a complete adaptive game, with colors, a clean exit in three ways, a summary table and the full report with `--stats`. Exit codes are 0 for a normal end or quit, 1 for a deck that cannot be loaded, and 2 for invalid arguments (the default of `argparse`). `black`, `isort`, `flake8` and `mypy` pass, and the 158 existing tests still pass. `ui.py` and `main.py` have no tests of their own yet, which are the next phase.
+
+**Lessons Learned:**
+- Features of a real terminal, such as colors, Ctrl+C and Ctrl+Z, can only be checked by hand. A script can call the function but cannot press the keys
+- A single catch for the interruptions made them easy to review: I could search the file and see one line
+- Deciding the design with exact examples before the prompt, such as the table layout, turned the verification into a comparison with exact text
+- Giving the AI freedom on an internal detail, such as a tuple or a dataclass, worked when I asked it to explain the choice in the docstring. My own sentence about it in the prompt was confusing, so I should reread a requirement before sending it
+- The agent reported a failure in its own verification script instead of hiding it. That makes its other results easier to trust
+- This phase produced no corrected code, so the evidence for reviewing the AI is in the design decisions I made first and in the manual tests
+
+
 
 
 
