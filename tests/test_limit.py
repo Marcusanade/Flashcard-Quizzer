@@ -14,20 +14,22 @@ import pytest
 from models import Flashcard
 from quiz_engine import AdaptiveMode, QuizMode, QuizSession
 from tests.helpers import (
+    ACC_FULL,
+    ACC_TWO_THIRDS,
+    ACC_ZERO,
     ParsedReport,
+    assert_ends_with_report,
+    box_start,
     green,
     make_cards,
     make_pairs,
     parse_report,
     red,
     run_ui,
+    summary_values,
     write_deck,
 )
 from ui import build_parser
-
-ACC_FULL = "[####################] 100.0%"
-ACC_TWO_THIRDS = "[#############-------]  66.7%"
-ACC_ZERO = "[--------------------]   0.0%"
 
 
 class CountingMode(QuizMode):
@@ -58,27 +60,6 @@ def answer(session: QuizSession, text: str) -> None:
     """Ask the next question and submit the given answer."""
     assert session.next_question() is not None
     session.submit_answer(text)
-
-
-def box_start(output: list[str]) -> int:
-    """Return the position of the first line of the report box."""
-    return next(i for i, line in enumerate(output) if line.startswith("+="))
-
-
-def summary(total: str, accuracy: str, rank: str) -> dict[str, str]:
-    """Build the expected values of a summary box."""
-    return {"Total questions": total, "Accuracy": accuracy, "Rank": rank}
-
-
-def assert_game(
-    output: list[str],
-    prefix: list[str],
-    values: dict[str, str],
-    missed: list[str],
-) -> None:
-    """Assert the lines before the box and the content of the box."""
-    assert output[: len(prefix)] == prefix
-    assert parse_report(output[len(prefix) :]) == ParsedReport(values, missed)
 
 
 # --- Engine: QuizSession -----------------------------------------------------
@@ -254,7 +235,9 @@ def test_run_limit_stops_a_sequential_quiz_as_a_normal_end(tmp_path: Path) -> No
         "Quiz finished.",
         "",
     ]
-    assert_game(result.output, prefix, summary("3", ACC_FULL, "S"), [])
+    assert_ends_with_report(
+        result.output, prefix, summary_values("3", ACC_FULL, "S"), []
+    )
 
 
 def test_run_limit_counts_wrong_answers_too(tmp_path: Path) -> None:
@@ -272,7 +255,9 @@ def test_run_limit_counts_wrong_answers_too(tmp_path: Path) -> None:
         "Quiz finished.",
         "",
     ]
-    assert_game(result.output, prefix, summary("3", ACC_TWO_THIRDS, "C"), ["B"])
+    assert_ends_with_report(
+        result.output, prefix, summary_values("3", ACC_TWO_THIRDS, "C"), ["B"]
+    )
 
 
 def test_run_limit_larger_than_the_deck_ends_with_the_cards(tmp_path: Path) -> None:
@@ -288,7 +273,9 @@ def test_run_limit_larger_than_the_deck_ends_with_the_cards(tmp_path: Path) -> N
         "Quiz finished.",
         "",
     ]
-    assert_game(result.output, prefix, summary("2", ACC_FULL, "S"), [])
+    assert_ends_with_report(
+        result.output, prefix, summary_values("2", ACC_FULL, "S"), []
+    )
 
 
 def test_run_limit_in_adaptive_mode_counts_the_reviews(tmp_path: Path) -> None:
@@ -310,7 +297,9 @@ def test_run_limit_in_adaptive_mode_counts_the_reviews(tmp_path: Path) -> None:
         "Quiz finished.",
         "",
     ]
-    assert_game(result.output, prefix, summary("5", ACC_ZERO, "D"), ["A", "B", "C"])
+    assert_ends_with_report(
+        result.output, prefix, summary_values("5", ACC_ZERO, "D"), ["A", "B", "C"]
+    )
 
 
 def test_run_limit_in_random_mode_asks_that_many_distinct_cards(
@@ -331,7 +320,7 @@ def test_run_limit_in_random_mode_asks_that_many_distinct_cards(
     assert output[start - 1] == ""
     assert output[start - 2] == "Quiz finished."
     assert parse_report(output[start:]) == ParsedReport(
-        summary("4", ACC_ZERO, "D"), asked
+        summary_values("4", ACC_ZERO, "D"), asked
     )
 
 
@@ -362,7 +351,7 @@ def test_run_limit_reached_is_a_finished_session_in_the_report(
         "Quiz finished.",
         "",
     ]
-    assert_game(result.output, prefix, values, [])
+    assert_ends_with_report(result.output, prefix, values, [])
 
 
 def test_run_quitting_before_the_limit_is_a_stopped_quiz(tmp_path: Path) -> None:
@@ -371,7 +360,9 @@ def test_run_quitting_before_the_limit_is_a_stopped_quiz(tmp_path: Path) -> None
     result = run_ui(["-f", str(path), "--limit", "3"], "a", "exit")
 
     prefix = ["Q1: A", green("Correct!"), "Q2: B", "Quiz stopped.", ""]
-    assert_game(result.output, prefix, summary("1", ACC_FULL, "S"), [])
+    assert_ends_with_report(
+        result.output, prefix, summary_values("1", ACC_FULL, "S"), []
+    )
 
 
 def test_run_invalid_limit_exits_with_code_2(

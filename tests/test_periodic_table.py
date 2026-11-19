@@ -7,20 +7,25 @@ games through the console interface.
 
 import json
 import re
-from pathlib import Path
 
 import pytest
 
 from data_loader import load_flashcards
 from models import Flashcard
-from tests.helpers import ParsedReport, green, parse_report, red, run_ui
+from tests.helpers import (
+    ACC_FULL,
+    ACC_ZERO,
+    DATA_DIR,
+    PROJECT_ROOT,
+    ParsedReport,
+    box_start,
+    green,
+    parse_report,
+    red,
+    run_ui,
+)
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = PROJECT_ROOT / "data"
 DECK = DATA_DIR / "periodic_table.json"
-
-ACC_FULL = "[####################] 100.0%"
-ACC_ZERO = "[--------------------]   0.0%"
 
 SYMBOL_PATTERN = r"^What is the chemical symbol of (.+)\?$"
 NUMBER_PATTERN = r"^What is the atomic number of (.+)\?$"
@@ -324,7 +329,7 @@ def test_random_game_asks_ten_different_cards_of_the_deck() -> None:
     result = run_ui(["-m", "random", "-f", str(DECK), "--limit", "10"], *["x"] * 10)
 
     output = result.output
-    start = next(i for i, line in enumerate(output) if line.startswith("+="))
+    start = box_start(output)
     matches = [re.match(r"^Q\d+: (.*)$", line) for line in output]
     asked = [match.group(1) for match in matches if match is not None]
     assert len(asked) == 10
@@ -374,7 +379,7 @@ def test_report_with_a_limit_shows_a_finished_session(
         ["-f", "data/periodic_table.json", "--limit", "2", "--stats"], "H", "1"
     )
 
-    start = next(i for i, line in enumerate(result.output) if line.startswith("+="))
+    start = box_start(result.output)
     assert parse_report(result.output[start:]) == ParsedReport(
         {
             "Mode": "sequential",

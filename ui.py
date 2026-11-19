@@ -291,9 +291,9 @@ def _ask_questions(
     Returns:
         True if the session ran out of cards, False if the user quit.
     """
+    player = sound if sound is not None else SilentPlayer()
     # Two identical cards in a deck are equal, so for the "(review)" label
     # they count as the same card.
-    player = sound if sound is not None else SilentPlayer()
     asked: set[Flashcard] = set()
     number = 0
     while (card := session.next_question()) is not None:
@@ -571,7 +571,7 @@ def run(
         error_fn(f"Error: {error}")
         return EXIT_LOAD_ERROR
     player = sound if sound is not None else create_player(args.sound)
-    if banner is True:
+    if banner:
         for line in _banner_lines(args.mode, len(cards)):
             output_fn(line)
         output_fn("")

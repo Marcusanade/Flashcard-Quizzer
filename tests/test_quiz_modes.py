@@ -17,13 +17,9 @@ from quiz_engine import (
     SequentialMode,
     rest_for_deck_size,
 )
+from tests.helpers import make_cards
 
 MODE_NAMES = ["sequential", "random", "adaptive"]
-
-
-def make_cards(*fronts: str) -> list[Flashcard]:
-    """Build cards whose back is the front in lowercase."""
-    return [Flashcard(front=front, back=front.lower()) for front in fronts]
 
 
 def ask_questions(mode: QuizMode, results: Sequence[bool]) -> list[str]:

@@ -15,6 +15,7 @@ import pytest
 import ui
 from quiz_engine import QuizSession, SequentialMode
 from tests.helpers import (
+    PROJECT_ROOT,
     LineRecorder,
     RecordingPlayer,
     ScriptedInput,
@@ -26,9 +27,6 @@ from tests.helpers import (
     write_deck,
 )
 from ui import _ask_questions, build_parser
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-
 
 # --- Parser ------------------------------------------------------------------
 

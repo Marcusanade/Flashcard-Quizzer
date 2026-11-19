@@ -16,6 +16,7 @@ from quiz_engine import (
     SessionStats,
     is_correct_answer,
 )
+from tests.helpers import make_cards
 
 
 class RecordingMode(QuizMode):
@@ -34,11 +35,6 @@ class RecordingMode(QuizMode):
     def record_result(self, card: Flashcard, correct: bool) -> None:
         """Store the reported pair."""
         self.recorded.append((card, correct))
-
-
-def make_cards(*fronts: str) -> list[Flashcard]:
-    """Build cards whose back is the front in lowercase."""
-    return [Flashcard(front=front, back=front.lower()) for front in fronts]
 
 
 def play(session: QuizSession, results: Sequence[bool]) -> list[str]:

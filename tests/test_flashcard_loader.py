@@ -13,9 +13,7 @@ import pytest
 
 from data_loader import FlashcardLoadError, load_flashcards
 from models import Flashcard
-
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-BOM = b"\xef\xbb\xbf"
+from tests.helpers import BOM, DATA_DIR
 
 
 def write_deck(directory: Path, content: str, name: str = "deck.json") -> Path:

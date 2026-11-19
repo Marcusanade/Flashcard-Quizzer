@@ -4,9 +4,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers import BOM
 from utils.file_handler import read_text_file
-
-BOM = b"\xef\xbb\xbf"
 
 
 def write_bytes(directory: Path, content: bytes, name: str = "file.txt") -> Path:

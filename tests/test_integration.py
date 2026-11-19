@@ -19,17 +19,24 @@ from data_loader import load_flashcards
 from models import Flashcard
 from quiz_engine import AnswerResult, QuizModeFactory, QuizSession
 from tests.helpers import (
+    ACC_88,
+    ACC_FULL,
+    ACC_HALF,
+    ACC_TWO_THIRDS,
+    ACC_ZERO,
+    DATA_DIR,
+    PROJECT_ROOT,
     LineRecorder,
     ParsedReport,
+    assert_ends_with_report,
+    full_values,
     green,
     parse_report,
     red,
     run_ui,
+    summary_values,
     write_deck,
 )
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = PROJECT_ROOT / "data"
 
 GLOSSARY = [
     ("API", "Application Programming Interface"),
@@ -56,11 +63,6 @@ PYTHON_BASICS = [
 
 # The layout of the report box is pinned in tests/test_ui.py. These tests check
 # the numbers and the missed terms of real games.
-ACC_ZERO = "[--------------------]   0.0%"
-ACC_HALF = "[##########----------]  50.0%"
-ACC_TWO_THIRDS = "[#############-------]  66.7%"
-ACC_88 = "[##################--]  88.9%"
-ACC_FULL = "[####################] 100.0%"
 QUESTION_PATTERN = r"^Q(\d+)( \(review\))?: (.*)$"
 
 
@@ -80,47 +82,6 @@ def expected_game_lines(
             green("Correct!") if is_correct else red(f"Incorrect. Answer: {back}")
         )
     return lines
-
-
-def summary_values(total: str, accuracy: str, rank: str) -> dict[str, str]:
-    """Build the expected values of a summary box."""
-    return {"Total questions": total, "Accuracy": accuracy, "Rank": rank}
-
-
-def full_values(
-    mode: str,
-    deck_file: str,
-    size: str,
-    session: str,
-    total: str,
-    correct: str,
-    incorrect: str,
-    accuracy: str,
-    rank: str,
-) -> dict[str, str]:
-    """Build the expected values of the full report box."""
-    return {
-        "Mode": mode,
-        "Deck file": deck_file,
-        "Deck size": size,
-        "Session": session,
-        "Total questions": total,
-        "Correct answers": correct,
-        "Incorrect answers": incorrect,
-        "Accuracy": accuracy,
-        "Rank": rank,
-    }
-
-
-def assert_ends_with_report(
-    output: Sequence[str],
-    prefix: Sequence[str],
-    values: dict[str, str],
-    missed: Sequence[str],
-) -> None:
-    """Assert the lines before the box and the content of the box."""
-    assert output[: len(prefix)] == list(prefix)
-    assert parse_report(output[len(prefix) :]) == ParsedReport(values, list(missed))
 
 
 class Learner:

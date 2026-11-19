@@ -7,16 +7,22 @@ import pytest
 from data_loader import load_flashcards
 from models import Flashcard
 from tests.helpers import (
+    DATA_DIR,
+    PROJECT_ROOT,
     LineRecorder,
     ParsedReport,
     RecordingPlayer,
     ScriptedInput,
+    assert_ends_with_report,
+    box_start,
+    full_values,
     green,
     make_cards,
     make_pairs,
     parse_report,
     red,
     run_ui,
+    summary_values,
     write_deck,
     yellow,
 )
@@ -502,3 +508,94 @@ def test_yellow_wraps_text_in_yellow_code() -> None:
 
 def test_yellow_of_an_empty_text_is_only_the_codes() -> None:
     assert yellow("") == "\x1b[33m\x1b[0m"
+
+
+# --- Shared expected-value helpers, box_start and the project folders --------
+
+
+def test_summary_values_builds_the_three_labels() -> None:
+    values = summary_values("3", "x", "C")
+
+    assert values == {"Total questions": "3", "Accuracy": "x", "Rank": "C"}
+
+
+def test_full_values_builds_the_nine_labels_in_order() -> None:
+    values = full_values(
+        "sequential", "deck.json", "3", "finished", "3", "2", "1", "x", "C"
+    )
+
+    assert list(values.items()) == [
+        ("Mode", "sequential"),
+        ("Deck file", "deck.json"),
+        ("Deck size", "3"),
+        ("Session", "finished"),
+        ("Total questions", "3"),
+        ("Correct answers", "2"),
+        ("Incorrect answers", "1"),
+        ("Accuracy", "x"),
+        ("Rank", "C"),
+    ]
+
+
+def test_assert_ends_with_report_passes_for_a_matching_output() -> None:
+    prefix = ["Q1: A", "Quiz finished.", ""]
+    values = {
+        "Total questions": "3",
+        "Accuracy": "[#############-------]  66.7%",
+        "Rank": "C",
+    }
+
+    assert_ends_with_report(prefix + BOX_SUMMARY_3_2_B, prefix, values, ["B"])
+
+
+@pytest.mark.parametrize(
+    ("prefix", "rank", "missed"),
+    [
+        (["Q1: X", "Quiz finished.", ""], "C", ["B"]),
+        (["Q1: A", "Quiz finished.", ""], "D", ["B"]),
+        (["Q1: A", "Quiz finished.", ""], "C", ["X"]),
+    ],
+    ids=["different-prefix", "different-values", "different-missed-terms"],
+)
+def test_assert_ends_with_report_fails_when_something_differs(
+    prefix: list[str], rank: str, missed: list[str]
+) -> None:
+    output = ["Q1: A", "Quiz finished.", ""] + BOX_SUMMARY_3_2_B
+    values = {
+        "Total questions": "3",
+        "Accuracy": "[#############-------]  66.7%",
+        "Rank": rank,
+    }
+
+    with pytest.raises(AssertionError):
+        assert_ends_with_report(output, prefix, values, missed)
+
+
+def test_box_start_returns_the_index_of_the_first_border() -> None:
+    assert box_start(["a", "b", "c"] + BOX_SUMMARY_0_0) == 3
+
+
+def test_box_start_without_a_box_raises_assertion_error() -> None:
+    with pytest.raises(AssertionError, match="No report box found"):
+        box_start(["a", "b"])
+
+
+def test_box_start_does_not_match_a_line_that_begins_with_an_escape() -> None:
+    lines = [green(BOX_SUMMARY_0_0[0]), "x"] + BOX_SUMMARY_0_0
+
+    assert box_start(lines) == 2
+
+
+def test_project_root_contains_main_py() -> None:
+    assert (PROJECT_ROOT / "main.py").is_file()
+
+
+@pytest.mark.parametrize("name", ["glossary.json", "periodic_table.json"])
+def test_data_dir_contains_the_decks(name: str) -> None:
+    assert (DATA_DIR / name).is_file()
+
+
+def test_box_start_does_not_match_a_border_that_is_not_the_first_of_a_box() -> None:
+    lines = [DASH] + BOX_SUMMARY_0_0
+
+    assert box_start(lines) == 1

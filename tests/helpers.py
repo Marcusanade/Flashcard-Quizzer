@@ -14,6 +14,20 @@ import ui
 from models import Flashcard
 from sound import SoundPlayer
 
+# Folder that contains tests/, and the data folder of the project.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DATA_DIR = PROJECT_ROOT / "data"
+
+# UTF-8 byte order mark, as some Windows editors write it.
+BOM = b"\xef\xbb\xbf"
+
+# Accuracy cells (bar and percentage) as they appear in the report box.
+ACC_ZERO = "[--------------------]   0.0%"
+ACC_HALF = "[##########----------]  50.0%"
+ACC_TWO_THIRDS = "[#############-------]  66.7%"
+ACC_88 = "[##################--]  88.9%"
+ACC_FULL = "[####################] 100.0%"
+
 
 def make_cards(*fronts: str) -> list[Flashcard]:
     """Build cards whose back is the front in lowercase.
@@ -346,3 +360,97 @@ def parse_report(lines: Sequence[str]) -> ParsedReport:
     if not in_missed_section:
         raise AssertionError("The report has no missed terms section")
     return ParsedReport(values, missed)
+
+
+def summary_values(total: str, accuracy: str, rank: str) -> dict[str, str]:
+    """Build the expected values of a summary box.
+
+    Args:
+        total: The text of the total questions.
+        accuracy: The text of the accuracy cell.
+        rank: The rank letter.
+
+    Returns:
+        The values by label.
+    """
+    return {"Total questions": total, "Accuracy": accuracy, "Rank": rank}
+
+
+def full_values(
+    mode: str,
+    deck_file: str,
+    size: str,
+    session: str,
+    total: str,
+    correct: str,
+    incorrect: str,
+    accuracy: str,
+    rank: str,
+) -> dict[str, str]:
+    """Build the expected values of the full report box.
+
+    Args:
+        mode: The quiz mode.
+        deck_file: The deck path as shown.
+        size: The deck size.
+        session: ``finished`` or ``stopped``.
+        total: The total questions.
+        correct: The correct answers.
+        incorrect: The incorrect answers.
+        accuracy: The text of the accuracy cell.
+        rank: The rank letter.
+
+    Returns:
+        The nine values by label.
+    """
+    return {
+        "Mode": mode,
+        "Deck file": deck_file,
+        "Deck size": size,
+        "Session": session,
+        "Total questions": total,
+        "Correct answers": correct,
+        "Incorrect answers": incorrect,
+        "Accuracy": accuracy,
+        "Rank": rank,
+    }
+
+
+def assert_ends_with_report(
+    output: Sequence[str],
+    prefix: Sequence[str],
+    values: dict[str, str],
+    missed: Sequence[str],
+) -> None:
+    """Assert the lines before the box and the content of the box.
+
+    Args:
+        output: Every line shown by the program.
+        prefix: The lines expected before the box.
+        values: The expected label/value rows of the box.
+        missed: The expected missed terms.
+
+    Raises:
+        AssertionError: If the prefix, the values or the missed terms differ.
+    """
+    assert output[: len(prefix)] == list(prefix)
+    assert parse_report(output[len(prefix) :]) == ParsedReport(values, list(missed))
+
+
+def box_start(output: Sequence[str]) -> int:
+    """Find the first line of the report box.
+
+    Args:
+        output: Every line shown by the program.
+
+    Returns:
+        The index of the first line that starts with ``+=``. A line that
+        begins with an escape sequence is not matched.
+
+    Raises:
+        AssertionError: If there is no such line.
+    """
+    for index, line in enumerate(output):
+        if line.startswith("+="):
+            return index
+    raise AssertionError("No report box found")
