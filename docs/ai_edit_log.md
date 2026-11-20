@@ -489,7 +489,7 @@ For each AI interaction, create a new entry with the following structure:
 - A test that goes through a filter cannot detect what the filter removes. Reading the raw file is the way to test the file and not the loader
 - The default rest of the adaptive mode grows with the deck: for 236 cards it is 10 questions, so a game of 5 questions shows no reviews. A test of the new deck documents this, which was a decision of an earlier phase
 
-**Outcome:** The program starts with a banner in green and yellow with the mode and the number of cards of the loaded deck, and there is a new deck with 236 cards. 469 tests pass, with 100% line and branch coverage in every file, and `black`, `isort`, `flake8` and `mypy` are clean. The banner is in commit `8560731`.
+**Outcome:** The program starts with a banner in green and yellow with the mode and the number of cards of the loaded deck, and there is a new deck with 236 cards. 469 tests pass, with 100% line and branch coverage in every file, and `black`, `isort`, `flake8` and `mypy` are clean. he banner is in commit 8560731 and the deck in commit 7cad4e5.
 
 **Lessons Learned:**
 - Mutation checks keep revealing gaps in my own prompts. In this phase two behaviors were missing from my lists of tests, and the mutations that survived showed exactly where

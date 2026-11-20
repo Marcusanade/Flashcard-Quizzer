@@ -51,8 +51,8 @@ The code is modular: a loader validates decks, a quiz engine with no input or ou
 
 #### Example 2: A docstring that promised too much
 **Context:** Reviewing the answer checker.
-**AI Prompt:** None. My review found that the docstring said an empty answer is incorrect, but the code returned True for two empty strings.
-**AI Response:** After my correction prompt, the function rejects empty answers.
+**AI Prompt:** A correction prompt, after my review found that the docstring said an empty answer is incorrect, but the code returned True for two empty strings.
+**AI Response:** The function now rejects empty answers.
 **Your Changes:** The prompt asked to change nothing else and to print the results with `repr()`.
 **Outcome:** It was the only real correction of AI code in the project.
 
