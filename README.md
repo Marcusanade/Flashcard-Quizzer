@@ -217,6 +217,7 @@ Flashcard-Quizzer/
 │   ├── ai_edit_log.md       # AI interaction log
 │   ├── coverage_report.txt  # Coverage report (the HTML report is not stored in Git)
 │   ├── design_patterns.md   # Pattern reference of the course
+│   ├── final_report.md      # Final project report
 │   └── report_template.md   # Template of the final report
 ├── ai_guidance/             # Prompting and code review guides of the course
 ├── .claude/                 # Claude Code configuration and the definition of done
@@ -225,6 +226,7 @@ Flashcard-Quizzer/
 ├── .flake8, mypy.ini        # Linter and type checker configuration
 └── requirements.txt         # Development tools
 ```
+
 ## Architecture
 
 How the modules depend on each other. The arrows point from the module that uses to the module that is used.
@@ -273,6 +275,7 @@ classDiagram
     SoundPlayer <|-- SilentPlayer
     SoundPlayer <|-- BellPlayer
 ```
+
 ## Development
 
 Run everything from the project folder, with the virtual environment active:
@@ -308,5 +311,6 @@ python -m mypy .
 ## Documentation
 
 - [`docs/ai_edit_log.md`](docs/ai_edit_log.md): the log of the AI interactions, with the prompts, the reviews and the lessons.
+- [`docs/final_report.md`](docs/final_report.md): the final project report.
 - [`docs/coverage_report.txt`](docs/coverage_report.txt): the test coverage report.
 - [`docs/design_patterns.md`](docs/design_patterns.md): the pattern reference of the course.
